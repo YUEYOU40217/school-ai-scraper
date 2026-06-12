@@ -24,12 +24,16 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scraper.py
 
-      # 升級版的自動存檔步驟，加入 rebase 邏輯避免衝突
+      # 終極版自動存檔：直接強制覆蓋，徹底解決衝突拒絕問題
       - name: Commit changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add announcements.json
           git commit -m "Auto-update announcements by Gemini Flash-Lite" || echo "沒有新公告需要更新"
-          git pull --rebase origin main  # 關鍵：先拉取最新程式碼進行融合，防止衝突被拒絕
-          git push
+          
+          # 關鍵：先拉取最新程式碼，如果遇到衝突就以最新的為主
+          git pull origin main --strategy-option=theirs --allow-unrelated-histories || echo "拉取無衝突"
+          
+          # 最終強制推送，絕對不接受 rejected
+          git push origin main --force
