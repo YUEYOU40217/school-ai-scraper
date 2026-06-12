@@ -1,3 +1,5 @@
+import os; print("--- 檔案內容開始 ---"); print(open("scraper.py", "r").read()); print("--- 檔案內容結束 ---")
+
 import json
 import requests
 import datetime
