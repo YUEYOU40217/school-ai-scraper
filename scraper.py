@@ -10,57 +10,55 @@ def main():
     with open("config.json", "r", encoding="utf-8") as f:
         config = json.load(f)
     
-    # 檢查是否在執行時段
-    taiwan_tz = timezone(timedelta(hours=8))
-    current_hour = datetime.now(taiwan_tz).hour
-    if current_hour not in config.get("active_hours", []):
-        print(f"當前時間為 {current_hour} 點，非執行時段。")
-        return
+    # (測試階段暫時註解掉時間檢查，方便隨時執行)
+    # taiwan_tz = timezone(timedelta(hours=8))
+    # current_hour = datetime.now(taiwan_tz).hour
+    # if current_hour not in config.get("active_hours", []):
+    #     print(f"當前時間為 {current_hour} 點，非執行時段。")
+    #     return
 
-    # 1. 讀取進度檔案
-    progress_file = "progress.json"
-    if os.path.exists(progress_file):
-        with open(progress_file, "r") as f: progress = json.load(f)
-    else: progress = {"index": 0}
-
-    # 2. 自動導航與清單抓取
+    # 1. 自動導航與清單抓取
     target_url = utils.find_announcement_page(config['urls'][0])
     
-    # 從 config 安全讀取選擇器
     selector_cfg = config.get('selector_config', {})
     row_selector = selector_cfg.get('row_selector', 'tr')
     link_selector = selector_cfg.get('link_selector', 'a')
     
+    print(f"🔍 準備使用規則抓取連結... 區塊: '{row_selector}', 連結: '{link_selector}'")
     all_links = utils.fetch_links(target_url, row_selector, link_selector)
+    
+    # 🚨 【新增：無腦全輸出除錯檔】
+    with open("debug_links.json", "w", encoding="utf-8") as f:
+        json.dump(all_links, f, ensure_ascii=False, indent=2)
+    print(f"👀 已經將剛剛爬到的 {len(all_links)} 筆原始連結，存進 debug_links.json！請打開確認。")
+    
+    if not all_links:
+        print("⚠️ 警告：抓到的連結數量為 0！代表 config.json 裡面的 selector_config (抓取規則) 不符合現在的網頁結構。")
+        return
+
+    # 為了測試，強制將進度歸零
+    progress = {"index": 0} 
     
     # 3. 分批截取處理
     idx = progress["index"]
     batch = all_links[idx : idx + BATCH_SIZE]
-    
-    if not batch:
-        print("🎉 所有公告已處理完畢！")
-        return
 
-    # 初始化 Gemini (建議使用穩定且官方推薦的 'gemini-1.5-flash')
+    # 初始化 Gemini
     genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
     model = genai.GenerativeModel('gemini-1.5-flash')
     
-    # 讀取現有歷史歷史資料
     final_data = []
     if os.path.exists("announcements.json"):
         with open("announcements.json", "r", encoding="utf-8") as f:
             try: final_data = json.load(f)
             except: final_data = []
 
-    # 逐筆處理目前的 Batch
     for item in batch:
         full_url = urljoin(target_url, item['href'])
-        print(f" 正在處理: {item['title']} -> {full_url}")
+        print(f"🤖 正在請 AI 處理: {item['title']} -> {full_url}")
         
-        # 呼叫 AI 核心處理
         ai_res = utils.process_ai(full_url, config['prompt_template'], model)
         
-        # 整合標題、連結與 AI 回傳的 {"summary": "..."}
         record = {
             "title": item['title'],
             "link": full_url,
@@ -68,16 +66,11 @@ def main():
         }
         final_data.append(record)
 
-    # 4. 儲存結果並更新歷史進度
+    # 4. 儲存結果
     with open("announcements.json", "w", encoding="utf-8") as f:
         json.dump(final_data, f, ensure_ascii=False, indent=2)
-    
-    # 進度累加實際處理的數量，避免最後一整批不足 BATCH_SIZE 時 index 算錯
-    progress["index"] += len(batch)
-    with open(progress_file, "w") as f: 
-        json.dump(progress, f)
         
-    print(f"✅ 成功處理 {len(batch)} 筆新公告，目前總進度位置：{progress['index']}")
+    print(f"✅ 成功處理 {len(batch)} 筆新公告！")
 
 if __name__ == "__main__":
     main()
