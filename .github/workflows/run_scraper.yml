@@ -2,17 +2,15 @@ name: AI Scraper
 
 on:
   schedule:
-    # 每小時的 0 分自動喚醒
     - cron: '0 * * * *'
-  workflow_dispatch: # 允許手動點擊 Run workflow 測試
+  workflow_dispatch:
 
 permissions:
-  contents: write # 賦予機器人寫入分支的權限
+  contents: write
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -20,26 +18,26 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-module-version: '3.x'
         python-version: '3.10'
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        # 強制安裝並升級套件
+        pip install requests beautifulsoup4 lxml google-generativeai
 
     - name: Run Scraper
       env:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      run: python scraper.py
+      run: |
+        # 直接指定 Python 環境執行，避免路徑衝突
+        python -m pip install google-generativeai
+        python scraper.py
 
-    # ✨ 核心大招：把產出的 json 自動推送到後台的 gh-pages 分支，保持主頁乾淨
-    - name: Deploy JSON to GitHub Pages Branch
+    - name: Deploy JSON to GitHub Pages
       uses: JamesIves/github-pages-deploy-action@v4
       with:
-        folder: .                  # 要上傳哪個資料夾（. 代表根目錄）
-        branch: gh-pages           # 目的地隱藏分支名稱
-        target-folder: .           # 放到該分支的根目錄
-        single-commit: true        # 👑 關鍵防洗版：每次都直接強行覆蓋，歷史紀錄永遠只有一條！
-        git-config-name: github-actions[bot]
-        git-config-email: 41898282+github-actions[bot]@users.noreply.github.com
+        folder: .
+        branch: gh-pages
+        target-folder: .
+        single-commit: true
