@@ -21,5 +21,14 @@ jobs:
         
       - name: Run scraper
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # 將保險箱的 Key 帶入環境變數
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scraper.py
+
+      # 修正後的自動存檔步驟
+      - name: Commit changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add announcements.json  # 關鍵：強制叫 Git 去盯緊這個檔案
+          git commit -m "Auto-update announcements by Gemini Flash-Lite" || echo "沒有新公告需要更新"
+          git push
