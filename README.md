@@ -30,11 +30,11 @@
    - **Value**: 貼上你的 Gemini API 金鑰。
 
 ### 2. 自定義配置 (`config.json`)
-可直接修改設定檔，限制爬蟲只在特定整點執行，或更換爬取標籤：
+可直接修改設定檔，限制爬蟲只在特定「 整點 」執行，或更換爬取標籤：
 ```json
 {
   "urls": ["[https://www.csu.edu.tw/p/403-1000-13-1.php](https://www.csu.edu.tw/p/403-1000-13-1.php)"],
-  "active_hours": [1, 7, 13, 16, 17, 19],
+  "active_hours": [6, 3, 11, 17, 20],
   "selector_config": {
     "row_selector": "tr",
     "link_selector": "a"
