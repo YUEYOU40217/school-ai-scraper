@@ -71,16 +71,14 @@ def get_page_content(url):
         print(f"⚠️ 無法讀取內頁內容 {url}: {e}")
         return None
 
-def process_ai(url, template, client):
-    """網頁內容擷取與 AI 摘要 (使用最新版 Google GenAI SDK)"""
-    content = get_page_content(url)
-    if not content: 
-        return {"summary": "無法抓取內容，該連結可能為附件檔案或無效網頁。"}
+def process_ai(title_text, template, client):
+    """直接將 config 的提示詞帶入，並替換標題關鍵字"""
+    # 將 config 裡面的 {title} 換成真正的公告標題
+    prompt = template.replace("{title}", title_text)
     
-    prompt = template.replace("{content}", content)
     try:
         response = client.models.generate_content(
-            model='gemini-3.1-flash-lite',  # 👈 換成你推薦的最強輕量模型！
+            model='gemini-3.1-flash-lite',
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -89,4 +87,4 @@ def process_ai(url, template, client):
         return json.loads(response.text.strip())
     except Exception as e:
         print(f"🤖 AI 解析錯誤: {e}")
-        return {"summary": "AI 解析失敗或回傳格式異常。"}
+        return {"keywords": ["解析失敗"]}
