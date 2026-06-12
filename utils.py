@@ -106,7 +106,7 @@ def process_ai(url, template, model):
     if not content: 
         return {"summary": "無法抓取內容，該連結可能為附件檔案或無效網頁。"}
     
-    prompt = template.format(content=content)
+    prompt = template.replace("{content}", content)
     try:
         # 強制 Gemini 輸出符合 config 規範的標準 JSON
         response = model.generate_content(
