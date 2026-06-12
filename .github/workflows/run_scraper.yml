@@ -24,16 +24,13 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scraper.py
 
-      # 終極版自動存檔：直接強制覆蓋，徹底解決衝突拒絕問題
+     # 終極過關版：直接把 GitHub Token 塞進 Push 網址，徹底繞過所有 rejection 衝突
       - name: Commit changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add announcements.json
-          git commit -m "Auto-update announcements by Gemini Flash-Lite" || echo "沒有新公告需要更新"
           
-          # 關鍵：先拉取最新程式碼，如果遇到衝突就以最新的為主
-          git pull origin main --strategy-option=theirs --allow-unrelated-histories || echo "拉取無衝突"
-          
-          # 最終強制推送，絕對不接受 rejected
-          git push origin main --force
+          # 如果沒有檔案變更，就直接結束
+          git commit -m "Auto-update announcements by Gemini Flash-Lite" || exit 0
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" main
