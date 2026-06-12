@@ -1,11 +1,9 @@
 {
-  "urls": [
-    "https://www.csu.edu.tw/p/403-1000-13-1.php"
-  ],
-  "active_hours": [0, 6, 12, 18,19,20,21,22,23],
+  "urls": ["https://www.csu.edu.tw/p/403-1000-13-1.php"],
+  "allowed_years": [2025, 2026],
   "selector_config": {
     "row_selector": ".mtitle",
     "link_selector": "a"
   },
-  "prompt_template": "你是一位學校行政公告摘要秘書。請針對以下這單一則公告的內文進行精準提煉。請嚴格以 JSON 物件格式回傳，且必須包含一個固定欄位 \"summary\"。格式範例：{\"summary\": \"這裡放你提煉的公告核心摘要（三句話以內）\"}。以下為公告內文：\n\n{content}"
+  "prompt_template": "請幫我分析這篇內容並提供摘要..."
 }
