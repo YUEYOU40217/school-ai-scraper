@@ -9,12 +9,3 @@
   },
   "prompt_template": "你是一位學校行政公告摘要秘書。請針對以下這單一則公告的內文進行精準提煉。\n\n公告內文：\n{content}\n\n請嚴格以 JSON 格式回傳物件（不要包含任何 markdown 標籤如 
 http://googleusercontent.com/immersive_entry_chip/0
-
----
-
-### 這樣做的好處是什麼？
-你看，現在你的 `scraper.py` 已經進化成神仙級別了：
-* 它完全不知道正修科大的網頁長怎樣，它只知道去 `config.json` 找 `row_selector`。
-* 萬一哪天正修科大把網頁改成用 `li` 標籤，你**完全不用改 Python 程式**，直接去 `config.json` 把 `"row_selector": "tr"` 改成 `"row_selector": "li"` 就能無縫收工！
-
-現在可以去測試執行了！這才是真正的動態配置，你的觀念非常精準！
