@@ -7,8 +7,7 @@ from google import genai
 from urllib.parse import urljoin
 
 MAX_RAW_LIMIT = 100 
-# 💡 每一次打包餵給 AI 的公告筆數 (設定 5 筆是最平衡、最不容易出錯的完美數量)
-BATCH_SIZE = 5 
+BATCH_SIZE = 10 
 
 def format_json_keywords(json_str):
     pattern = r'"keywords":\s*\[\s*([^\]]*?)\s*\]'
@@ -18,6 +17,23 @@ def format_json_keywords(json_str):
         joined_items = "".join(cleaned_items).replace('","', '", "')
         return f'"keywords": [{joined_items}]'
     return re.sub(pattern, replace_func, json_str, flags=re.DOTALL)
+
+def clean_and_parse_date(date_str):
+    """💡 核心優化：將各種奇形怪狀的日期（民國、斜線、橫線）統一轉換為可以正確排序的 datetime 物件"""
+    try:
+        # 取出純數字部分
+        nums = [int(s) for s in re.findall(r'\d+', date_str)]
+        if len(nums) < 3:
+            return datetime(1970, 1, 1) # 格式不對的丟到最後面
+        
+        year, month, day = nums[0], nums[1], nums[2]
+        # 如果是民國年 (小於 200)
+        if year < 200:
+            year += 1911
+            
+        return datetime(year, month, day)
+    except:
+        return datetime(1970, 1, 1)
 
 def main():
     with open("config.json", "r", encoding="utf-8") as f:
@@ -38,7 +54,9 @@ def main():
         year_keywords.append(str(y - 1911))   
     
     client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-    all_sites_output = []
+    
+    # 💡 這裡改成用一個扁平的清單，把所有網站抓到的公告先「借放」在一起
+    all_extracted_records = []
 
     for site in config.get("sites", []):
         target_url = site['url']
@@ -51,9 +69,6 @@ def main():
             print(f"警告：{site_name} 未能偵測到任何公告，跳過。")
             continue
 
-        all_links.sort(key=lambda x: x['date'], reverse=True)
-
-        # 💡 步驟 1：地端初篩，先收集這家網站所有符合年份的合法公告
         valid_items = []
         out_of_range_count = 0 
 
@@ -70,55 +85,69 @@ def main():
             out_of_range_count = 0
             valid_items.append(item)
 
-        # 💡 步驟 2：開始進行「分批切片餵食 (Batching)」
-        processed_data = []
-        current_id = 1
-        
         print(f"[{site_name}] 合格公告共 {len(valid_items)} 筆，開始進行每 {BATCH_SIZE} 筆分批打包解析...")
         
         for i in range(0, len(valid_items), BATCH_SIZE):
-            # 切片切出當前的批次 (例如 0~5, 5~10...)
             batch = valid_items[i : i + BATCH_SIZE]
             batch_titles = [item['title'] for item in batch]
             
             print(f"[{site_name}] 正在發送批次請求 (當前打包共 {len(batch_titles)} 筆)...")
-            # 把這一整批標題直接塞給 AI
             batch_ai_results = utils.process_ai_batch(batch_titles, config['prompt_template'], client)
             
-            # 將 AI 回傳的批次結果與原公告資料進行對齊組合
             for idx, item in enumerate(batch):
                 full_url = urljoin(target_url, item['href'])
                 
-                # 安全防護：確保 AI 回傳的數量夠用，如果不夠就塞保底失敗
                 keywords = ["解析失敗"]
                 if idx < len(batch_ai_results):
                     keywords = batch_ai_results[idx].get("keywords", ["解析失敗"])
                 
-                record = {
-                    "id": current_id,
+                # 先把資料塞進全域大池子裡，並且記錄網站來源
+                all_extracted_records.append({
+                    "source_name": source_name,
+                    "source_link": target_url,
                     "title": item['title'],
                     "link": full_url,
-                    "keywords": keywords
-                }
-                processed_data.append(record)
-                current_id += 1
+                    "keywords": keywords,
+                    "raw_date": item['date'], # 留下原始日期文字
+                    "parsed_datetime": clean_and_parse_date(item['date']) # 轉化為可用於精準排序的物件
+                })
 
-        if processed_data:
-            site_packet = {
-                "source_name": source_name,
-                "source_link": target_url,
-                "data": processed_data
+    # 💡 終極全域排序：不分學校，把池子裡所有的公告，按照日期從最新到最舊（降序）大洗牌！
+    all_extracted_records.sort(key=lambda x: x['parsed_datetime'], reverse=True)
+
+    # 💡 重新包裝成你原本習慣的按學校分類的結構，但「順序已經完全依照日期排好」
+    final_output = []
+    site_data_map = {}
+
+    current_id = 1
+    for rec in all_extracted_records:
+        src_url = rec['source_link']
+        if src_url not in site_data_map:
+            site_data_map[src_url] = {
+                "source_name": rec['source_name'],
+                "source_link": src_url,
+                "data": []
             }
-            all_sites_output.append(site_packet)
+        
+        # 建立每一筆公告的最終格式
+        site_data_map[src_url]["data"].append({
+            "id": current_id, # 💡 這裡的 ID 會完美對應「全網最新到最舊」的順序
+            "title": rec['title'],
+            "link": rec['link'],
+            "keywords": rec['keywords']
+        })
+        current_id += 1
+
+    final_output = list(site_data_map.values())
 
     # 存檔
-    raw_json = json.dumps(all_sites_output, ensure_ascii=False, indent=2)
+    raw_json = json.dumps(final_output, ensure_ascii=False, indent=2)
     final_json = format_json_keywords(raw_json)
 
     with open("announcements.json", "w", encoding="utf-8") as f:
         f.write(final_json)
         
-    print("全部網站批次打包處理完畢！")
+    print("全部網站處理完畢，且已完成全域最新日期排序！")
 
 if __name__ == "__main__":
     main()
