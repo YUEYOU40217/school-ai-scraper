@@ -1,11 +1,12 @@
 import json
 import requests
 import datetime
-import google.generativeai as genai  # 修正：改用正確的匯入方式
+# 【修正這裡】改用下面這行正確的 import 方式
+import google.generativeai as genai 
 from bs4 import BeautifulSoup
 
 def run():
-    # 1. 讀取設定檔
+    # 讀取設定檔
     try:
         with open("config.json", "r", encoding="utf-8") as f:
             config = json.load(f)
@@ -13,20 +14,20 @@ def run():
         print("錯誤：找不到 config.json")
         return
 
-    # 2. 時間檢查
+    # 時間檢查
     current_hour = datetime.datetime.now().hour
     active_hours = config.get("active_hours", [])
     if active_hours and current_hour not in active_hours:
         print(f"現在是 {current_hour} 點，跳過執行。")
         return
 
-    # 3. 初始化 Gemini (改用標準寫法)
+    # 【修正這裡】使用正確的語法
     genai.configure(api_key=config['api_key'])
-    model = genai.GenerativeModel('gemini-1.5-flash') # 使用穩定的 flash 模型
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
     final_data = []
 
-    # 4. 爬蟲邏輯
+    # 爬蟲邏輯
     for url in config.get('urls', []):
         try:
             headers = {'User-Agent': 'Mozilla/5.0'}
@@ -53,9 +54,11 @@ def run():
         except Exception as e:
             print(f"爬取 {url} 失敗: {e}")
 
-    # 5. 存檔
+    # 存檔
     with open("announcements.json", "w", encoding="utf-8") as f:
         json.dump(final_data, f, ensure_ascii=False, indent=2)
+
+    print("爬蟲任務順利完成！")
 
 if __name__ == "__main__":
     run()
