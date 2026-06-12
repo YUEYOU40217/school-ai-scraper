@@ -6,10 +6,6 @@
       "name": "正修科技大學",
       "url": "https://www.csu.edu.tw/p/403-1000-13-1.php"
     },
-    {
-      "name": "國立高雄科技大學",
-      "url": "https://ws1.nkust.edu.tw/Activity/"
-    }
   ],
   "prompt_template": "請分析以下多則學校公告標題，並依序為每一則標題萃取出 1 到 5 個繁體中文關鍵字，用來代表公告的核心內容。請嚴格以 JSON 陣列格式回傳，格式如下：\n[\n  {\"keywords\": [\"關鍵字1\", \"關鍵字2\"]},\n  {\"keywords\": [\"關鍵字3\"]}\n]\n注意：回傳的 JSON 陣列長度必須與輸入的標題數量完全一致！絕對不要包含任何小圖標、表情符號（Emoji）或 Markdown 標籤（如 ```json）。\n\n以下為待分析的標題列表：\n{batch_input}"
 }
