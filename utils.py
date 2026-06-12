@@ -47,12 +47,27 @@ def fetch_links(target_url, row_selector):
         print(f"抓取連結失敗: {e}")
         return []
 
-def process_ai(content, template, model):
-    """功能三：呼叫 AI 進行摘要"""
+def get_page_content(url):
+    """新增：打開連結並抓取內文"""
+    try:
+        if "javascript:" in url or "flickr.com" in url: return None
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        resp = requests.get(url, timeout=10, headers=headers)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        # 抓取內文，過濾多餘標籤
+        for script in soup(["script", "style", "nav", "footer"]): script.extract()
+        return soup.get_text(separator=' ', strip=True)[:1500] # 限制長度避免過長
+    except: return None
+
+def process_ai(url, template, model):
+    """修改：先抓內容，再傳給 AI"""
+    content = get_page_content(url)
+    if not content: return {"summary": "無法抓取內容或連結無效。"}
+    
     prompt = template.format(content=content)
     try:
         response = model.generate_content(prompt)
         text = response.text.replace("```json", "").replace("```", "").strip()
         return json.loads(text)
     except:
-        return {"summary": "處理失敗，請點連結查看。"}
+        return {"summary": "AI 解析失敗。"}
