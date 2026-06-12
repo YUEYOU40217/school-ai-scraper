@@ -1,7 +1,7 @@
 {
-  "api_key": "AQ.Ab8RN6KfFr-10U6_whJx5_upfPhmmYduo-__pnt8je7erCH6ZA",
-  "urls": ["https://example.school.edu.tw/news"],
-  "keywords": "獎學金, 停電, 選課, 註冊",
-  "active_hours": [0, 6, 12, 18], 
-  "prompt": "請閱讀網頁內容，找出所有公告並提煉資訊。"
+  "api_key": "你的API_KEY",
+  "urls": ["你的目標網址"],
+  "keywords": "獎學金, 停電",
+  "prompt": "請抓取公告...",
+  "active_hours": [9, 13, 18]
 }
