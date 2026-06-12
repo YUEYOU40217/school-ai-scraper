@@ -1,0 +1,11 @@
+{
+  "urls": [
+    "https://www.csu.edu.tw/p/403-1000-13-1.php"
+  ],
+  "active_hours": [0, 6, 12, 18],
+  "selector_config": {
+    "row_selector": "tr",
+    "link_selector": "a"
+  },
+  "prompt_template": "你是一位學校行政公告摘要秘書。請針對以下這單一則公告的內文進行精準提煉。公告內文：{content}。請嚴格以 JSON 格式回傳物件，不要包含 markdown 標籤。"
+}
