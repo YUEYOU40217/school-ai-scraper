@@ -7,5 +7,5 @@
     "row_selector": "tr",
     "link_selector": "a"
   },
-  "prompt_template": "你是一位學校行政公告摘要秘書。請針對以下這單一則公告的內文進行精準提煉。\n\n公告內文：\n{content}\n\n請嚴格以 JSON 格式回傳物件（不要包含任何 markdown 標籤如 
-http://googleusercontent.com/immersive_entry_chip/0
+  "prompt_template": "你是一位學校行政公告摘要秘書。請針對以下這單一則公告的內文進行精準提煉。公告內文：{content}。請嚴格以 JSON 格式回傳物件，不要包含 markdown 標籤。"
+}
