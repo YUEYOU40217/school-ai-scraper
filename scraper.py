@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
 def run():
-    # 1. 讀取設定檔 (config.json)
+    # 1. 讀取設定檔
     try:
         with open("config.json", "r", encoding="utf-8") as f:
             config = json.load(f)
@@ -15,7 +15,7 @@ def run():
         print(f"無法讀取 config.json: {e}")
         return
 
-    # 2. 時間守門員 (強制設定為台灣時間 UTC+8)
+    # 2. 強制設定台灣時間 (UTC+8)
     taiwan_tz = timezone(timedelta(hours=8))
     current_hour = datetime.now(taiwan_tz).hour
     active_hours = config.get("active_hours", [])
@@ -60,7 +60,7 @@ def run():
                 
                 if "javascript:" in detail_url or detail_url == base_url: continue
 
-                # 爬取內頁內容
+                # 爬取內頁
                 try:
                     inner_resp = requests.get(detail_url, timeout=10, headers=headers)
                     inner_soup = BeautifulSoup(inner_resp.text, "html.parser")
@@ -72,8 +72,8 @@ def run():
                 prompt = template.format(content=content)
                 try:
                     response = model.generate_content(prompt)
-                    res_text = response.text.replace("```json", "").replace("
-```", "").strip()
+                    # 確保這行不會斷行
+                    res_text = response.text.replace("```json", "").replace("```", "").strip()
                     ai_data = json.loads(res_text)
                     final_data.append({
                         "title": title, "date": ai_data.get("date", "未提供"),
@@ -84,9 +84,8 @@ def run():
                     })
                 except:
                     final_data.append({"title": title, "summary": "摘要失敗", "link": detail_url})
-
         except Exception as e:
-            print(f"發生錯誤: {e}")
+            print(f"爬取失敗: {e}")
 
     # 5. 存檔
     with open("announcements.json", "w", encoding="utf-8") as f:
