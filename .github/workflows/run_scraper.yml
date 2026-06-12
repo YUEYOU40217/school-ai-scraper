@@ -1,8 +1,8 @@
 name: AI Scraper
 on:
   schedule:
-    - cron: '0 * * * *'  # 關鍵修改：每小時的 0 分執行一次
-  workflow_dispatch:     # 讓你依然可以手動點擊 Run
+    - cron: '0 * * * *'  # 每小時的 0 分執行一次
+  workflow_dispatch:     # 允許手動點擊 Run
 
 jobs:
   scrape:
@@ -20,4 +20,7 @@ jobs:
         run: pip install -r requirements.txt
         
       - name: Run scraper
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # 關鍵修改：將保險箱的 Key 帶入環境
         run: python scraper.py
+        
