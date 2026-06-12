@@ -2,6 +2,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 import urllib3  
+import urllib.request  # 💡 引入內建的最底層連線庫
+import ssl             # 💡 引入底層 SSL 模組
 from bs4 import BeautifulSoup
 from google import genai
 from google.genai import types
@@ -9,7 +11,7 @@ import json
 import re
 from urllib.parse import urljoin
 
-# 強制關閉 SSL 警告文字
+# 關閉常規警告文字
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def get_robust_session():
@@ -28,25 +30,44 @@ def fetch_links_smart(target_url):
     """【無格式盲猜版】自動尋找網頁中帶有日期的公告連結"""
     resp_text = None
     
-    # 💡 雙重保險連線機制
+    # 💡 終極三重保險連線機制
     try:
-        # 第一彈：嘗試用常規強固型 Session 連線
+        # 第一彈：常規 Session 連線
         resp = session.get(target_url, timeout=15, verify=False)
         resp.encoding = resp.apparent_encoding
         resp_text = resp.text
     except Exception as e:
-        print(f"⚠️ [第一彈 Session 連線失敗] 錯誤原因: {e}，正在切換成獨立強行突破模式...")
+        print(f"⚠️ [第一彈 Session 連線失敗] 錯誤原因: {e}，切換獨立模式...")
         try:
-            # 第二彈：如果 Session 被本地憑證卡死，直接脫離 Session，用全新乾淨的 requests 裸連
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }
+            # 第二彈：獨立 requests 連線
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
             resp = requests.get(target_url, headers=headers, timeout=15, verify=False)
             resp.encoding = resp.apparent_encoding
             resp_text = resp.text
         except Exception as e2:
-            print(f"❌ [雙重保險皆失敗] 無法連線至該網站: {e2}")
-            return "抓取失敗", []
+            print(f"⚠️ [第二彈 獨立連線也失敗] 錯誤原因: {e2}。")
+            print("🔥 [啟動終極第三彈] 使用底層 urllib 建立不驗證 SSL 上下文強行突破...")
+            try:
+                # 第三彈：使用 Python 最底層的 urllib，並強制建立一個「完全不驗證」的 SSL Context
+                # 這可以完全無視作業系統的憑證鏈，直接強行拉回網頁原始碼
+                context = ssl._create_unverified_context()
+                req = urllib.request.Request(
+                    target_url, 
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+                )
+                with urllib.request.urlopen(req, context=context, timeout=15) as response:
+                    # 讀取網頁並自動偵測編碼
+                    raw_data = response.read()
+                    # 學校網站通常是 utf-8 或 big5，先用 utf-8 猜，失敗就用 big5
+                    try:
+                        resp_text = raw_data.decode('utf-8')
+                    except UnicodeDecodeError:
+                        resp_text = raw_data.decode('big5', errors='ignore')
+                        
+                print("🎯 [終極第三彈] 成功強行突破高科大 SSL 限制！")
+            except Exception as e3:
+                print(f"❌ [三重保險皆失敗] 該網址真的無法連線: {e3}")
+                return "抓取失敗", []
 
     try:
         soup = BeautifulSoup(resp_text, "html.parser")
