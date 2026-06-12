@@ -1,4 +1,4 @@
-# 正修科大行政公告自動化摘要 (School AI Scraper)
+# 學校公告自動化摘要 (School AI Scraper)
 
 透過 GitHub Actions 每小時自動巡邏正修官網，利用 Gemini 深入公告內頁摘要，並自動更新 JSON 資料。
 
