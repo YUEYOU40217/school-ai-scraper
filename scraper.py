@@ -28,7 +28,7 @@ def run():
         return
         
     genai.configure(api_key=api_key)
-    # 關鍵修改：指定使用極致輕量免費的 1.5-flash-lite
+    # 使用極致輕量免費的 1.5-flash-lite
     model = genai.GenerativeModel('gemini-1.5-flash-lite')
 
     final_data = []
@@ -43,29 +43,17 @@ def run():
             
             content = soup.get_text(separator=' ', strip=True)[:3000]
             
-            prompt = f"""
-            你是一位專業的資訊摘要秘書。請根據網頁內容整理公告。
-            
-            任務要求：
-            1. 提取所有關鍵資訊：時間、對象、地點、申請方式、重要說明。
-            2. 目標是讓使用者讀完摘要後「完全不需要點擊連結」。若網頁內容過少，請務必標註「內容僅有標題，建議點擊詳情」。
-            3. 自動產生 3-5 個關鍵標籤。
-            
-            網頁內容如下:
-            {content}
-            
-            請嚴格以 JSON 格式回傳陣列，如下：
-            [
-                {{
-                    "keywords": ["標籤1", "標籤2"],
-                    "summary": "這裡填寫詳細摘要，將所有重要資訊條列式說明",
-                    "link": "{url}"
-                }}
-            ]
-            """
+            # 從 config.json 讀取提示詞範本，並動態帶入內容與網址
+            template = config.get("prompt_template", "")
+            if not template:
+                print("錯誤：config.json 中找不到 prompt_template")
+                return
+                
+            prompt = template.format(content=content, url=url)
             
             response = model.generate_content(prompt)
-            res_text = response.text.replace("```json", "").replace("```", "").strip()
+            res_text = response.text.replace("```json", "").replace("
+```", "").strip()
             data = json.loads(res_text)
             
             if isinstance(data, list):
@@ -82,4 +70,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-
