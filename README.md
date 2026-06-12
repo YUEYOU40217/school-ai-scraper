@@ -44,7 +44,7 @@
 ```json
 {
   "allowed_years": [2025, 2026],
-  "scheduled_hours": [0, 6, 12, 18],
+  "scheduled_hours": [3, 8, 10, 16],
   "sites": [
     {
       "name": "正修科技大學",
