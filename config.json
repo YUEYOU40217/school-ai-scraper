@@ -2,7 +2,7 @@
   "urls": [
     "https://www.csu.edu.tw/p/403-1000-13-1.php"
   ],
-  "active_hours": [1, 7, 13, 16, 19],
+  "active_hours": [1, 7, 13, 17, 19],
   "selector_config": {
     "row_selector": "tr",
     "link_selector": "a"
