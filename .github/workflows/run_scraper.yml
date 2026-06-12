@@ -1,36 +1,45 @@
 name: AI Scraper
+
 on:
   schedule:
-    - cron: '0 * * * *'  # 保持原樣：每小時的 0 分都起來敲門
-  workflow_dispatch:     # 允許手動點擊 Run
+    # 每小時的 0 分自動喚醒
+    - cron: '0 * * * *'
+  workflow_dispatch: # 允許手動點擊 Run workflow 測試
+
+permissions:
+  contents: write # 賦予機器人寫入分支的權限
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-          
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-        
-      - name: Run scraper
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python scraper.py
 
-     # 終極過關版：直接把 GitHub Token 塞進 Push 網址，徹底繞過所有 rejection 衝突
-      - name: Commit changes
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add announcements.json
-          
-          # 如果沒有檔案變更，就直接結束
-          git commit -m "Auto-update announcements by Gemini Flash-Lite" || exit 0
-          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" main
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-module-version: '3.x'
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests beautifulsoup4 google-genai
+
+    - name: Run Scraper
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      run: python scraper.py
+
+    # ✨ 核心大招：把產出的 json 自動推送到後台的 gh-pages 分支，保持主頁乾淨
+    - name: Deploy JSON to GitHub Pages Branch
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        folder: .                  # 要上傳哪個資料夾（. 代表根目錄）
+        branch: gh-pages           # 目的地隱藏分支名稱
+        target-folder: .           # 放到該分支的根目錄
+        single-commit: true        # 👑 關鍵防洗版：每次都直接強行覆蓋，歷史紀錄永遠只有一條！
+        git-config-name: github-actions[bot]
+        git-config-email: 41898282+github-actions[bot]@users.noreply.github.com
