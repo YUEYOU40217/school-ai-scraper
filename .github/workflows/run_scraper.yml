@@ -1,7 +1,7 @@
 name: AI Scraper
 on:
   schedule:
-    - cron: '0 * * * *'  # 每小時的 0 分執行一次
+    - cron: '0 * * * *'  # 保持原樣：每小時的 0 分都起來敲門
   workflow_dispatch:     # 允許手動點擊 Run
 
 jobs:
@@ -24,11 +24,12 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scraper.py
 
-      # 修正後的自動存檔步驟
+      # 升級版的自動存檔步驟，加入 rebase 邏輯避免衝突
       - name: Commit changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add announcements.json  # 關鍵：強制叫 Git 去盯緊這個檔案
+          git add announcements.json
           git commit -m "Auto-update announcements by Gemini Flash-Lite" || echo "沒有新公告需要更新"
+          git pull --rebase origin main  # 關鍵：先拉取最新程式碼進行融合，防止衝突被拒絕
           git push
