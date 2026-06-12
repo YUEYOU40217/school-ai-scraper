@@ -20,44 +20,53 @@ def get_robust_session():
 
 session = get_robust_session()
 
-def fetch_links(target_url, row_selector, link_selector):
-    """抓取公告頁面連結、整行文字、網站名稱與日期"""
+def fetch_links_smart(target_url):
+    """【無格式盲猜版】自動尋找網頁中帶有日期的公告連結"""
     try:
         resp = session.get(target_url, timeout=15)
         resp.encoding = resp.apparent_encoding
         soup = BeautifulSoup(resp.text, "html.parser")
         
-        # 自動抓取網頁的 Title 當作來源名稱
         source_name = soup.title.get_text(strip=True) if soup.title else "未命名網頁"
         
-        rows = soup.select(row_selector) if row_selector else [soup]
         links = []
         seen_urls = set()
+        all_a_tags = soup.find_all('a')
         
-        for row in rows:
-            row_text = row.get_text(separator=' ', strip=True) 
+        for a_tag in all_a_tags:
+            href = a_tag.get('href')
+            title = a_tag.get_text(strip=True)
             
-            # 嘗試從整行文字中萃取日期（支援 2026-06-12 或 115-06-12 或 2026/06/12 等各式常見格式）
-            date_match = re.search(r'(\d{3,4}[-/]\d{1,2}[-/]\d{1,2})', row_text)
-            date_str = date_match.group(1) if date_match else "0000-00-00"
+            if not href or not title or len(title) < 5: 
+                continue
+                
+            full_url = urljoin(target_url, href)
+            if full_url in seen_urls: 
+                continue
+                
+            parent = a_tag.parent
+            row_text = ""
+            date_str = "0000-00-00"
             
-            a_tags = row.select(link_selector) if link_selector else row.find_all('a')
-            for a_tag in a_tags:
-                if a_tag and a_tag.get('href'):
-                    title = a_tag.get_text(strip=True)
-                    href = a_tag.get('href')
-                    full_url = urljoin(target_url, href)
-                    
-                    if not title or len(title) < 4: continue
-                    if full_url in seen_urls: continue
-                    
-                    links.append({
-                        "title": title, 
-                        "href": href, 
-                        "row_text": row_text,
-                        "date": date_str
-                    })
-                    seen_urls.add(full_url)
+            for _ in range(3):
+                if parent:
+                    row_text = parent.get_text(separator=' ', strip=True)
+                    date_match = re.search(r'(\d{2,4}[-/]\d{1,2}[-/]\d{1,2})', row_text)
+                    if date_match:
+                        date_str = date_match.group(1)
+                        break
+                    parent = parent.parent
+            
+            if date_str == "0000-00-00":
+                continue
+                
+            links.append({
+                "title": title, 
+                "href": href, 
+                "row_text": row_text,
+                "date": date_str
+            })
+            seen_urls.add(full_url)
                     
         return source_name, links
     except Exception as e:
@@ -65,7 +74,6 @@ def fetch_links(target_url, row_selector, link_selector):
         return "抓取失敗", []
 
 def process_ai(title_text, template, client):
-    """將 config 的提示詞模板帶入，並替換標題交由 AI 解析關鍵字"""
     prompt = template.replace("{title}", title_text)
     try:
         response = client.models.generate_content(
