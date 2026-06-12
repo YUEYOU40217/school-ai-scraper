@@ -80,7 +80,7 @@ def process_ai(url, template, client):
     prompt = template.replace("{content}", content)
     try:
         response = client.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-3.1-flash-lite',  # 👈 換成你推薦的最強輕量模型！
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
