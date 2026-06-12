@@ -10,30 +10,23 @@ def main():
     with open("config.json", "r", encoding="utf-8") as f:
         config = json.load(f)
     
-    # (測試階段暫時註解掉時間檢查，方便隨時執行)
-    # taiwan_tz = timezone(timedelta(hours=8))
-    # current_hour = datetime.now(taiwan_tz).hour
-    # if current_hour not in config.get("active_hours", []):
-    #     print(f"當前時間為 {current_hour} 點，非執行時段。")
-    #     return
-
-    # 1. 自動導航與清單抓取
-    target_url = utils.find_announcement_page(config['urls'][0])
+    # 1. 直接使用你設定的絕對網址，不再自動導航亂跑！
+    target_url = config['urls'][0]
+    print(f"🎯 鎖定目標網址: {target_url}")
     
     selector_cfg = config.get('selector_config', {})
-    row_selector = selector_cfg.get('row_selector', 'tr')
+    row_selector = selector_cfg.get('row_selector', '.mtitle')
     link_selector = selector_cfg.get('link_selector', 'a')
     
     print(f"🔍 準備使用規則抓取連結... 區塊: '{row_selector}', 連結: '{link_selector}'")
     all_links = utils.fetch_links(target_url, row_selector, link_selector)
     
-    # 🚨 【新增：無腦全輸出除錯檔】
     with open("debug_links.json", "w", encoding="utf-8") as f:
         json.dump(all_links, f, ensure_ascii=False, indent=2)
-    print(f"👀 已經將剛剛爬到的 {len(all_links)} 筆原始連結，存進 debug_links.json！請打開確認。")
+    print(f"👀 已經將剛剛爬到的 {len(all_links)} 筆原始連結，存進 debug_links.json！")
     
     if not all_links:
-        print("⚠️ 警告：抓到的連結數量為 0！代表 config.json 裡面的 selector_config (抓取規則) 不符合現在的網頁結構。")
+        print("⚠️ 警告：抓到的連結數量為 0！")
         return
 
     # 為了測試，強制將進度歸零
@@ -43,9 +36,9 @@ def main():
     idx = progress["index"]
     batch = all_links[idx : idx + BATCH_SIZE]
 
-    # 初始化 Gemini
+    # 初始化 Gemini (改用帶有 -latest 的完整名稱，解決 404 報錯)
     genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
     
     final_data = []
     if os.path.exists("announcements.json"):
