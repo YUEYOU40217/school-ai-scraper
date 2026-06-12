@@ -1,7 +1,6 @@
 {
-  "api_key": "你的API_KEY",
-  "urls": ["你的目標網址"],
-  "keywords": "獎學金, 停電",
-  "prompt": "請抓取公告...",
+  "urls": [
+    "https://你的學校公告網址.edu.tw"
+  ],
   "active_hours": [9, 13, 18]
 }
