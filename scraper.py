@@ -15,16 +15,18 @@ def run():
         print(f"無法讀取 config.json: {e}")
         return
 
-    # 2. 強制設定台灣時間 (UTC+8)
+    # 2. 終極時間守門員 (強制台灣時間)
     taiwan_tz = timezone(timedelta(hours=8))
-    current_hour = datetime.now(taiwan_tz).hour
+    now = datetime.now(taiwan_tz)
+    current_hour = now.hour
     active_hours = config.get("active_hours", [])
     
-    if active_hours and current_hour not in active_hours:
-        print(f"現在是台灣時間 {current_hour} 點，不在執行時段內 {active_hours}，跳過爬蟲。")
+    # 檢查現在時間是否在設定列表中
+    if current_hour not in active_hours:
+        print(f"現在是台灣時間 {current_hour} 點，不在設定的執行時段 {active_hours} 內，跳過。")
         return
 
-    print(f"現在是台灣時間 {current_hour} 點，開始執行爬蟲任務...")
+    print(f"現在是台灣時間 {current_hour} 點，符合執行時段，開始執行爬蟲任務...")
 
     # 3. 設定 Gemini API
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -49,15 +51,13 @@ def run():
             soup = BeautifulSoup(resp.text, "html.parser")
             
             rows = soup.find_all(row_selector)
-            print(f"偵測到區塊數量: {len(rows)}")
-
+            
             for row in rows:
                 a_tag = row.find(link_selector) if row_selector != link_selector else row
                 if not a_tag or not a_tag.get('href'): continue
                 
                 title = a_tag.get_text(strip=True)
                 detail_url = urljoin(base_url, a_tag.get('href'))
-                
                 if "javascript:" in detail_url or detail_url == base_url: continue
 
                 # 爬取內頁
@@ -72,7 +72,6 @@ def run():
                 prompt = template.format(content=content)
                 try:
                     response = model.generate_content(prompt)
-                    # 確保這行不會斷行
                     res_text = response.text.replace("```json", "").replace("```", "").strip()
                     ai_data = json.loads(res_text)
                     final_data.append({
