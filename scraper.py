@@ -1,8 +1,7 @@
 import json
 import requests
 import datetime
-# 【修正這裡】改用下面這行正確的 import 方式
-import google.generativeai as genai 
+import google.generativeai as genai
 from bs4 import BeautifulSoup
 
 def run():
@@ -10,8 +9,8 @@ def run():
     try:
         with open("config.json", "r", encoding="utf-8") as f:
             config = json.load(f)
-    except FileNotFoundError:
-        print("錯誤：找不到 config.json")
+    except Exception as e:
+        print(f"無法讀取 config.json: {e}")
         return
 
     # 時間檢查
@@ -21,7 +20,7 @@ def run():
         print(f"現在是 {current_hour} 點，跳過執行。")
         return
 
-    # 【修正這裡】使用正確的語法
+    # 設定 API
     genai.configure(api_key=config['api_key'])
     model = genai.GenerativeModel('gemini-1.5-flash')
 
