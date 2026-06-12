@@ -21,7 +21,6 @@ def run():
     current_hour = now.hour
     active_hours = config.get("active_hours", [])
     
-    # 檢查現在時間是否在設定列表中
     if current_hour not in active_hours:
         print(f"現在是台灣時間 {current_hour} 點，不在設定的執行時段 {active_hours} 內，跳過。")
         return
@@ -40,25 +39,35 @@ def run():
     final_data = []
     sel_config = config.get("selector_config", {})
     row_selector = sel_config.get("row_selector", "tr")
-    link_selector = sel_config.get("link_selector", "a")
     template = config.get("prompt_template", "")
 
-    # 4. 爬蟲核心
+    # 4. 強制掃描爬蟲核心
     for base_url in config.get('urls', []):
         try:
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
             resp = requests.get(base_url, timeout=15, headers=headers)
             soup = BeautifulSoup(resp.text, "html.parser")
             
+            # 嘗試原本的 row_selector
             rows = soup.find_all(row_selector)
             
+            # 如果找不到 row，強迫抓取頁面上所有 <a> 標籤，保證有東西爬
+            if not rows:
+                print("未找到指定 row_selector，強制切換為全網頁連結掃描模式...")
+                rows = soup.find_all('a')
+            
+            print(f"DEBUG: 本次共掃描到 {len(rows)} 個潛在連結點")
+            
             for row in rows:
-                a_tag = row.find(link_selector) if row_selector != link_selector else row
+                # 判斷是否為連結，如果是 row 裡面包 a，則提取 a；如果是 a 本身則直接處理
+                a_tag = row if row.name == 'a' else row.find('a')
                 if not a_tag or not a_tag.get('href'): continue
                 
                 title = a_tag.get_text(strip=True)
                 detail_url = urljoin(base_url, a_tag.get('href'))
-                if "javascript:" in detail_url or detail_url == base_url: continue
+                
+                # 過濾無效連結
+                if "javascript:" in detail_url or len(title) < 5: continue
 
                 # 爬取內頁
                 try:
@@ -82,7 +91,7 @@ def run():
                         "link": detail_url
                     })
                 except:
-                    final_data.append({"title": title, "summary": "摘要失敗", "link": detail_url})
+                    final_data.append({"title": title, "summary": "內容請點擊連結查看。", "link": detail_url})
         except Exception as e:
             print(f"爬取失敗: {e}")
 
