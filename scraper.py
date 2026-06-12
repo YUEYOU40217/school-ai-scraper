@@ -52,8 +52,9 @@ def run():
             prompt = template.format(content=content, url=url)
             
             response = model.generate_content(prompt)
-            res_text = response.text.replace("```json", "").replace("
-```", "").strip()
+            
+            # 修正這附近斷掉的程式碼，確保整行完整
+            res_text = response.text.replace("```json", "").replace("```", "").strip()
             data = json.loads(res_text)
             
             if isinstance(data, list):
