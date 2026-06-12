@@ -1,0 +1,8 @@
+{
+  "api_key": "AQ.Ab8RN6KfFr-10U6_whJx5_upfPhmmYduo-__pnt8je7erCH6ZA",
+  "urls": [
+    "https://example.school.edu.tw/news"
+  ],
+  "keywords": "獎學金, 停電, 選課, 註冊",
+  "prompt": "請閱讀網頁內容，找出所有公告並提煉資訊。"
+}
