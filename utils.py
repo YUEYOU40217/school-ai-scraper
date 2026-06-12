@@ -21,23 +21,26 @@ def get_robust_session():
 session = get_robust_session()
 
 def fetch_links_smart(target_url):
-    """【無格式盲猜版】自動尋找網頁中帶有日期的公告連結"""
     try:
         resp = session.get(target_url, timeout=15)
         resp.encoding = resp.apparent_encoding
         soup = BeautifulSoup(resp.text, "html.parser")
         
         source_name = soup.title.get_text(strip=True) if soup.title else "未命名網頁"
-        
         links = []
         seen_urls = set()
         all_a_tags = soup.find_all('a')
+        
+        garbage_words = ["跳到", "主要內容", "previous", "next", "首頁", "返回", "coreui"]
         
         for a_tag in all_a_tags:
             href = a_tag.get('href')
             title = a_tag.get_text(strip=True)
             
             if not href or not title or len(title) < 5: 
+                continue
+                
+            if href.startswith('#') or any(w in title.lower() for w in garbage_words):
                 continue
                 
             full_url = urljoin(target_url, href)
@@ -73,8 +76,12 @@ def fetch_links_smart(target_url):
         print(f"抓取清單失敗: {e}")
         return "抓取失敗", []
 
-def process_ai(title_text, template, client):
-    prompt = template.replace("{title}", title_text)
+def process_ai_batch(titles_list, template, client):
+    """【批次 AI 處理引擎】一次打包多個標題送給 AI，極大化節省 API 呼叫次數"""
+    # 將標題清單轉化為帶有編號的文字串
+    formatted_inputs = "\n".join([f"{i+1}. {title}" for i, title in enumerate(titles_list)])
+    prompt = template.replace("{batch_input}", formatted_inputs)
+    
     try:
         response = client.models.generate_content(
             model='gemini-3.1-flash-lite',
@@ -85,5 +92,6 @@ def process_ai(title_text, template, client):
         )
         return json.loads(response.text.strip())
     except Exception as e:
-        print(f"AI 解析錯誤: {e}")
-        return {"keywords": ["解析失敗"]}
+        print(f"AI 批次解析錯誤: {e}")
+        # 發生錯誤時，回傳與輸入數量相符的保底失敗防護
+        return [{"keywords": ["解析失敗"]} for _ in titles_list]
