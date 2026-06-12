@@ -8,7 +8,6 @@ import json
 from urllib.parse import urljoin
 
 def get_robust_session():
-    """建立帶有自動重試機制的 Session，提高連線穩定度"""
     session = requests.Session()
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -21,7 +20,7 @@ def get_robust_session():
 session = get_robust_session()
 
 def fetch_links(target_url, row_selector, link_selector):
-    """抓取公告頁面連結並過濾雜訊"""
+    """抓取公告頁面連結、整行文字並過濾雜訊"""
     try:
         resp = session.get(target_url, timeout=15)
         resp.encoding = resp.apparent_encoding
@@ -32,6 +31,8 @@ def fetch_links(target_url, row_selector, link_selector):
         seen_urls = set()
         
         for row in rows:
+            row_text = row.get_text(separator=' ', strip=True) 
+            
             a_tags = row.select(link_selector) if link_selector else row.find_all('a')
             for a_tag in a_tags:
                 if a_tag and a_tag.get('href'):
@@ -42,38 +43,15 @@ def fetch_links(target_url, row_selector, link_selector):
                     if not title or len(title) < 4: continue
                     if full_url in seen_urls: continue
                     
-                    links.append({"title": title, "href": href})
+                    links.append({"title": title, "href": href, "row_text": row_text})
                     seen_urls.add(full_url)
         return links
     except Exception as e:
-        print(f"❌ 抓取清單失敗: {e}")
+        print(f"抓取清單失敗: {e}")
         return []
-
-def get_page_content(url):
-    """安全開啟連結並抓取乾淨的網頁內文"""
-    try:
-        if any(x in url.lower() for x in ["javascript:", "flickr.com", ".pdf", ".docx", ".xlsx", ".zip", ".jpg", ".png"]): 
-            return None
-            
-        resp = session.get(url, timeout=10, stream=True)
-        content_type = resp.headers.get('Content-Type', '')
-        if 'text/html' not in content_type:
-            return None
-            
-        resp.encoding = resp.apparent_encoding
-        soup = BeautifulSoup(resp.text, "html.parser")
-        
-        for script in soup(["script", "style", "nav", "footer", "iframe", "header"]): 
-            script.extract()
-            
-        return soup.get_text(separator=' ', strip=True)[:2000]
-    except Exception as e:
-        print(f"⚠️ 無法讀取內頁內容 {url}: {e}")
-        return None
 
 def process_ai(title_text, template, client):
     """直接將 config 的提示詞帶入，並替換標題關鍵字"""
-    # 將 config 裡面的 {title} 換成真正的公告標題
     prompt = template.replace("{title}", title_text)
     
     try:
@@ -86,5 +64,5 @@ def process_ai(title_text, template, client):
         )
         return json.loads(response.text.strip())
     except Exception as e:
-        print(f"🤖 AI 解析錯誤: {e}")
+        print(f"AI 解析錯誤: {e}")
         return {"keywords": ["解析失敗"]}
