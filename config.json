@@ -8,7 +8,7 @@
     },
     {
       "name": "國立高雄科技大學",
-      "url": "https://www.nkust.edu.tw/p/424-1000-7-1.php?Lang=zh-tw"
+      "url": "https://ws1.nkust.edu.tw/Activity/"
     }
   ],
   "prompt_template": "請分析以下學校公告標題，並萃取出 1 到 5 個繁體中文關鍵字，用來代表這則公告的分類或核心內容（例如：招生、獎學金、宿舍、演講）。請嚴格以 JSON 格式回傳，格式如下：\n{\"keywords\": [\"關鍵字1\", \"關鍵字2\"]}\n注意：絕對不要包含任何小圖標、表情符號（Emoji）或 Markdown 標籤（如 ```json）。\n\n公告標題：{title}"
