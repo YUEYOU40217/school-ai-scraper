@@ -1,12 +1,16 @@
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
+import urllib3  
 from bs4 import BeautifulSoup
 from google import genai
 from google.genai import types
 import json
 import re
 from urllib.parse import urljoin
+
+# 強制關閉 SSL 警告文字
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def get_robust_session():
     session = requests.Session()
@@ -21,11 +25,31 @@ def get_robust_session():
 session = get_robust_session()
 
 def fetch_links_smart(target_url):
+    """【無格式盲猜版】自動尋找網頁中帶有日期的公告連結"""
+    resp_text = None
+    
+    # 💡 雙重保險連線機制
     try:
-        resp = session.get(target_url, timeout=15)
+        # 第一彈：嘗試用常規強固型 Session 連線
+        resp = session.get(target_url, timeout=15, verify=False)
         resp.encoding = resp.apparent_encoding
-        soup = BeautifulSoup(resp.text, "html.parser")
-        
+        resp_text = resp.text
+    except Exception as e:
+        print(f"⚠️ [第一彈 Session 連線失敗] 錯誤原因: {e}，正在切換成獨立強行突破模式...")
+        try:
+            # 第二彈：如果 Session 被本地憑證卡死，直接脫離 Session，用全新乾淨的 requests 裸連
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+            resp = requests.get(target_url, headers=headers, timeout=15, verify=False)
+            resp.encoding = resp.apparent_encoding
+            resp_text = resp.text
+        except Exception as e2:
+            print(f"❌ [雙重保險皆失敗] 無法連線至該網站: {e2}")
+            return "抓取失敗", []
+
+    try:
+        soup = BeautifulSoup(resp_text, "html.parser")
         source_name = soup.title.get_text(strip=True) if soup.title else "未命名網頁"
         links = []
         seen_urls = set()
@@ -73,15 +97,11 @@ def fetch_links_smart(target_url):
                     
         return source_name, links
     except Exception as e:
-        print(f"抓取清單失敗: {e}")
+        print(f"抓取清單解析失敗: {e}")
         return "抓取失敗", []
 
 def process_ai_batch(titles_list, template, client):
-    """【批次 AI 處理引擎】一次打包多個標題送給 AI，極大化節省 API 呼叫次數"""
-    # 將標題清單轉化為帶有編號的文字串
-    formatted_inputs = "\n".join([f"{i+1}. {title}" for i, title in enumerate(titles_list)])
-    prompt = template.replace("{batch_input}", formatted_inputs)
-    
+    prompt = template.replace("{batch_input}", "\n".join([f"{i+1}. {title}" for i, title in enumerate(titles_list)]))
     try:
         response = client.models.generate_content(
             model='gemini-3.1-flash-lite',
@@ -93,5 +113,4 @@ def process_ai_batch(titles_list, template, client):
         return json.loads(response.text.strip())
     except Exception as e:
         print(f"AI 批次解析錯誤: {e}")
-        # 發生錯誤時，回傳與輸入數量相符的保底失敗防護
         return [{"keywords": ["解析失敗"]} for _ in titles_list]
