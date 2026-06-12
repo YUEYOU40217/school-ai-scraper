@@ -9,7 +9,7 @@
 
 - **基礎模型**：Google Gemini 1.5 Flash-Lite (由 Google AI Studio 提供)
 - **選用優勢**：專為高頻率、低延遲的自動化任務設計。具備超大上下文視窗（Context Window），即使公告內頁包含數千字活動規章也能輕鬆吞下，且在免費額度內運作綽綽有餘。
-- **輸出格式**：採用結構化提示詞（Structured Prompting），強制 AI 扮演行政秘書，精準吐出防呆的標準 JSON 物件。
+- **輸出格式**：採用結構化提示詞（Structured Prompting）。
 
 ---
 
@@ -21,7 +21,7 @@
 
 ---
 
-## 🛠️ 運行指南
+## 運行指南
 
 ### 1. 配置環境與密鑰
 1. 去 [Google AI Studio](https://aistudio.google.com/) 免費申請一組 API Key。
