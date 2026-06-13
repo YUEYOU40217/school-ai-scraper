@@ -1,6 +1,6 @@
 {
   "allowed_years": [2025, 2026],
-  "scheduled_hours": [10, 18],
+  "scheduled_hours": [2, 10, 18,],
   "sites": [
     {
       "name": "正修科技大學",
