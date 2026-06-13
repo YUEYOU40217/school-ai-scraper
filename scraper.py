@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import uuid
 import utils
 from datetime import datetime, timedelta, timezone
 from google import genai
@@ -19,18 +20,13 @@ def format_json_keywords(json_str):
     return re.sub(pattern, replace_func, json_str, flags=re.DOTALL)
 
 def clean_and_parse_date(date_str):
-    """💡 核心優化：將各種奇形怪狀的日期（民國、斜線、橫線）統一轉換為可以正確排序的 datetime 物件"""
     try:
-        # 取出純數字部分
         nums = [int(s) for s in re.findall(r'\d+', date_str)]
         if len(nums) < 3:
-            return datetime(1970, 1, 1) # 格式不對的丟到最後面
-        
+            return datetime(1970, 1, 1)
         year, month, day = nums[0], nums[1], nums[2]
-        # 如果是民國年 (小於 200)
         if year < 200:
             year += 1911
-            
         return datetime(year, month, day)
     except:
         return datetime(1970, 1, 1)
@@ -38,14 +34,26 @@ def clean_and_parse_date(date_str):
 def main():
     with open("config.json", "r", encoding="utf-8") as f:
         config = json.load(f)
-    
+
+    # 1. 精準取得當前台灣時間 (UTC+8)
+    tz_tw = timezone(timedelta(hours=8))
+    now_tw = datetime.now(tz_tw)
+    current_hour = now_tw.hour
+    current_minute = now_tw.minute
+
+    # 2. 智慧時間安全檢查鎖
     scheduled_hours = config.get("scheduled_hours", [])
-    if scheduled_hours:
-        tz_taiwan = timezone(timedelta(hours=8))
-        current_hour = datetime.now(tz_taiwan).hour
-        if current_hour not in scheduled_hours:
-            print(f"目前台灣時間為 {current_hour} 點，非設定的執行整點 {scheduled_hours}。")
-            return
+    
+    # 情況 A：剛好在設定的小時內執行 (例如 10:20)
+    is_on_time = current_hour in scheduled_hours
+    # 情況 B：因為 GitHub 塞車延遲，不小心跨到下一個小時的前 30 分鐘
+    is_delayed_but_valid = ((current_hour - 1) % 24) in scheduled_hours and current_minute < 30
+
+    if scheduled_hours and not (is_on_time or is_delayed_but_valid):
+        print(f"目前台灣時間為 {current_hour:02d}:{current_minute:02d}，非設定的執行時段 {scheduled_hours}，跳過本次執行。")
+        return
+
+    print(f"安全檢查通過！當前台灣時間: {current_hour:02d}:{current_minute:02d}，開始執行爬蟲任務...")
 
     allowed_years = config.get("allowed_years", [2025, 2026])
     year_keywords = []
@@ -54,8 +62,6 @@ def main():
         year_keywords.append(str(y - 1911))   
     
     client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-    
-    # 💡 這裡改成用一個扁平的清單，把所有網站抓到的公告先「借放」在一起
     all_extracted_records = []
 
     for site in config.get("sites", []):
@@ -96,30 +102,24 @@ def main():
             
             for idx, item in enumerate(batch):
                 full_url = urljoin(target_url, item['href'])
-                
                 keywords = ["解析失敗"]
                 if idx < len(batch_ai_results):
                     keywords = batch_ai_results[idx].get("keywords", ["解析失敗"])
                 
-                # 先把資料塞進全域大池子裡，並且記錄網站來源
                 all_extracted_records.append({
                     "source_name": source_name,
                     "source_link": target_url,
                     "title": item['title'],
                     "link": full_url,
                     "keywords": keywords,
-                    "raw_date": item['date'], # 留下原始日期文字
-                    "parsed_datetime": clean_and_parse_date(item['date']) # 轉化為可用於精準排序的物件
+                    "raw_date": item['date'],
+                    "parsed_datetime": clean_and_parse_date(item['date'])
                 })
 
-    # 💡 終極全域排序：不分學校，把池子裡所有的公告，按照日期從最新到最舊（降序）大洗牌！
     all_extracted_records.sort(key=lambda x: x['parsed_datetime'], reverse=True)
 
-    # 💡 重新包裝成你原本習慣的按學校分類的結構，但「順序已經完全依照日期排好」
-    final_output = []
     site_data_map = {}
-
-    current_id = 1
+    
     for rec in all_extracted_records:
         src_url = rec['source_link']
         if src_url not in site_data_map:
@@ -129,25 +129,31 @@ def main():
                 "data": []
             }
         
-        # 建立每一筆公告的最終格式
         site_data_map[src_url]["data"].append({
-            "id": current_id, # 💡 這裡的 ID 會完美對應「全網最新到最舊」的順序
+            "uuid": str(uuid.uuid4()), # 這裡已換成自動生成的 uuid
             "title": rec['title'],
             "link": rec['link'],
             "keywords": rec['keywords']
         })
-        current_id += 1
 
-    final_output = list(site_data_map.values())
+    final_output = []
+    
+    # 重組最終陣列，精準將 total_count 塞入 source_link 下方
+    for site_info in site_data_map.values():
+        final_output.append({
+            "source_name": site_info["source_name"],
+            "source_link": site_info["source_link"],
+            "total_count": len(site_info["data"]),
+            "data": site_info["data"]
+        })
 
-    # 存檔
     raw_json = json.dumps(final_output, ensure_ascii=False, indent=2)
     final_json = format_json_keywords(raw_json)
 
     with open("announcements.json", "w", encoding="utf-8") as f:
         f.write(final_json)
         
-    print("全部網站處理完畢，且已完成全域最新日期排序！")
+    print("全部網站處理完畢，且已完成全域最新日期排序、UUID 替換與總筆數寫入！")
 
 if __name__ == "__main__":
     main()
