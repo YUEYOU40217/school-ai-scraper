@@ -24,11 +24,9 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      # 👇 關鍵新增：從 gh-pages 拿回昨天的記憶
       - name: Fetch old data from gh-pages
         run: |
           git fetch origin gh-pages || true
-          # 嘗試把 gh-pages 的 json 複製過來，如果沒有（第一次執行）就不理它
           git show origin/gh-pages:announcements.json > announcements.json || true
 
       - name: Run python script
@@ -36,24 +34,19 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scraper.py
 
-- name: Commit and Push to gh-pages
+      - name: Commit and Push to gh-pages
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # 1. 先把剛剛爬蟲生出來的最新 json 複製到系統暫存區備份
           cp announcements.json /tmp/announcements.json
           
-          # 2. ✨關鍵修復：清除 main 分支上的本地變更，讓 Git 乖乖放行分支切換
           git checkout -- announcements.json || true
           
-          # 3. 獲取遠端最新的 gh-pages 並切換過去
           git fetch origin gh-pages
           git checkout gh-pages
           
-          # 4. 把備份的最新 json 蓋回目前的 gh-pages 分支
           cp /tmp/announcements.json announcements.json
           
-          # 5. 提交並推回 GitHub 的 gh-pages 分支
           git add announcements.json
           git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update: sync data to gh-pages" && git push origin gh-pages)
