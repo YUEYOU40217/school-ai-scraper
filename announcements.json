@@ -1,1 +1,286 @@
-[]
+[
+  {
+    "source_name": "活動訊息平台 - 活動訊息平台",
+    "source_link": "https://ws1.nkust.edu.tw/Activity/",
+    "total_count": 33,
+    "data": [
+      {
+        "uuid": "b5a05f23-9ef2-4331-b9b1-e45155ca4146",
+        "title": "【AI時代教與學-教師研習】從備課到學生引導，通通和您一起探索❤",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260325103011u9Aynj",
+        "keywords": ["AI教學", "教師研習", "備課", "學生引導"]
+      },
+      {
+        "uuid": "2824963f-d769-4f2a-9f97-d7a1ff917a6f",
+        "title": "♾️解鎖教學實踐研究倫理與知情同意♾️",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260612143229y8b17r",
+        "keywords": ["教學實踐研究", "研究倫理", "知情同意"]
+      },
+      {
+        "uuid": "54f34534-387e-4d97-acee-c2fc09764191",
+        "title": "建工靜音艙體驗活動",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=202606091131205yxs5H",
+        "keywords": ["建工校區", "靜音艙", "體驗活動"]
+      },
+      {
+        "uuid": "20090058-e5ab-43a4-9b25-671bebbfdfdc",
+        "title": "【115年- 數位混成學習專業培訓班】我們回來啦!!! (線上互動工具 / Airtime虛擬攝影棚 / Canva製作 / 混成教學 )—讓教學現場有更多的可能與樣貌",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260316163024IiD128",
+        "keywords": ["數位混成教學", "專業培訓", "Canva", "虛擬攝影棚"]
+      },
+      {
+        "uuid": "ef1c2014-a4ee-495e-a07e-7de968d2be65",
+        "title": "2026 新加坡英語金融與 STEAM 夏令營｜拓展國際視野的全英語學習體驗",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=2026021310003035GkfK",
+        "keywords": ["2026", "新加坡", "英語", "金融", "STEAM 夏令營"]
+      },
+      {
+        "uuid": "623edc36-1cd8-4580-9ccc-dc04185540d6",
+        "title": "2026 新加坡英語金融與 STEAM 夏令營｜拓展國際視野的全英語學習體驗",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=202602121630065Ap6y1",
+        "keywords": ["2026", "新加坡", "英語", "金融", "STEAM 夏令營"]
+      },
+      {
+        "uuid": "6ece99ed-d0f1-4ac6-85e7-4e925200516b",
+        "title": "2026 設計未來式 企業校外參訪 x 現場設計觀察",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260605174949RT7L66",
+        "keywords": ["設計未來式", "企業參訪", "設計觀察"]
+      },
+      {
+        "uuid": "ca16152d-011f-4483-b252-5d8d8b9e23b0",
+        "title": "1+1 ＞2設計開發實務教具操作教學(Design Thinking x AI x SROI)",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=2026052811263892tZU6",
+        "keywords": ["設計開發", "實務教具", "Design Thinking", "AI", "SROI"]
+      },
+      {
+        "uuid": "5056f76a-b858-411e-9661-d9c420153423",
+        "title": "115-1高教深耕教學創新補助計畫徵件說明會",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260514094504bBHL33",
+        "keywords": ["高教深耕", "教學創新", "補助計畫", "說明會"]
+      },
+      {
+        "uuid": "d9dbc94f-b327-499e-8aac-9b83e93a3364",
+        "title": "6/24(三)智慧船舶到無人船的思維變革與產學契機交流講座",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=2026060213585908771V",
+        "keywords": ["智慧船舶", "無人船", "產學交流", "講座"]
+      },
+      {
+        "uuid": "059d4473-5ff1-41e6-b39c-a005735c44e2",
+        "title": "提升研發能量暨期刊論文發表系列演講(二)(報名請點Google表單)",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=202606021513569wAFN6",
+        "keywords": ["研發能量", "期刊論文", "系列演講"]
+      },
+      {
+        "uuid": "26ffd963-e078-4f4c-8d28-5c2bd994007d",
+        "title": "114學年度電子系(建工)小畢典(701)",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260527164058BK8208",
+        "keywords": ["114學年度", "電子系", "建工校區", "小畢典"]
+      },
+      {
+        "uuid": "8e2a3376-80c8-4282-90b7-7a2a3a5f513d",
+        "title": "114學年度 智慧商務系系畢業典禮",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260610135142yj3r1g",
+        "keywords": ["114學年度", "智慧商務系", "畢業典禮"]
+      },
+      {
+        "uuid": "83d64c5b-6806-49f8-a185-5f75f7006ad2",
+        "title": "| NKUST INTERN LIFE | 2026實習隨手拍 熱情徵件中",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260525141458Bd4409",
+        "keywords": ["NKUST", "實習", "隨手拍", "徵件"]
+      },
+      {
+        "uuid": "09f3183c-4dcc-4445-9eeb-0a438b7529e7",
+        "title": "✨確定開班✨ 科技產業園區(加工區)保稅業務人員證照班",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=202605181302210A8BMs",
+        "keywords": ["科技產業園區", "保稅業務人員", "證照班", "確定開班"]
+      },
+      {
+        "uuid": "bcb1cc4e-76f8-4cf2-8239-a0eb8aa15afa",
+        "title": "❣️USR-教學實踐：課程設計與Hub共創工作坊❣️",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260603155036371jKh",
+        "keywords": ["USR", "教學實踐", "課程設計", "工作坊"]
+      },
+      {
+        "uuid": "56f5d958-9e8d-43cb-bdf0-ed82dc1ef31c",
+        "title": "115年iPAS AI應用規劃師初級證照輔導班",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260309110927yJCh2n",
+        "keywords": ["115年", "iPAS", "AI應用規劃師", "證照輔導班"]
+      },
+      {
+        "uuid": "c9c2ac35-54df-4fab-a8ec-3210f7815b8c",
+        "title": "【實戰訓練】內容創客 Podcast A-Z",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260414150825o394jR",
+        "keywords": ["實戰訓練", "內容創客", "Podcast"]
+      },
+      {
+        "uuid": "7184d7fe-63d8-491a-8be5-2f69dcc2731f",
+        "title": "借書換好禮！楠梓圖書館【閱讀集點，搶鮮體驗】活動開跑！",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260513164820566YJi",
+        "keywords": ["楠梓圖書館", "借書活動", "閱讀集點"]
+      },
+      {
+        "uuid": "38b42232-ea8c-4814-a5dc-2869d94ac85c",
+        "title": "【一般報名專用】 未來的聖像實驗室—劉政融個展",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260223174709QlabIB",
+        "keywords": ["個展", "劉政融", "藝文活動"]
+      },
+      {
+        "uuid": "9902ead3-d99b-407d-8df2-cbb16604a5b9",
+        "title": "【通識微學分認證學生報名專用】 未來的聖像實驗室—劉政融個展",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=2026022317491685sL8s",
+        "keywords": ["個展", "通識微學分", "劉政融"]
+      },
+      {
+        "uuid": "452bfc62-9964-4d64-8a0e-9f1e972a2243",
+        "title": "高雄產業新想像-科技應用之發想與實踐(22)",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=202602261120068J422O",
+        "keywords": ["高雄產業", "科技應用", "創新"]
+      },
+      {
+        "uuid": "089cf21f-82ce-48f2-8d30-e1f21adb73bc",
+        "title": "【114-2】畢業前哨站-學位論文上傳及繳交流程說明會",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260331111448k17bWp",
+        "keywords": ["114-2", "畢業", "學位論文", "上傳", "繳交"]
+      },
+      {
+        "uuid": "8dc55a77-d5fe-49d9-8f7f-8e2eb548906e",
+        "title": "114-2 建工校區《當我們同在一起》多元性別支持團體 學生諮商團體報名表(供餐)",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260204094630ZAgNnQ",
+        "keywords": ["114-2", "多元性別", "支持團體", "學生諮商", "報名"]
+      },
+      {
+        "uuid": "4d97dd8e-0d1e-4e1a-99fd-5769e9ebba3c",
+        "title": "大集大利集點活動",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260428091944M2SFnY",
+        "keywords": ["集點活動", "大集大利"]
+      },
+      {
+        "uuid": "2d65b93e-d854-4273-a368-e1d1b25b5c2f",
+        "title": "【一般報名專用】 高科大典藏作品展—寫實藝術之當代觀點",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=202602231735118d8ES6",
+        "keywords": ["高科大", "典藏展", "寫實藝術", "當代觀點"]
+      },
+      {
+        "uuid": "1cf51011-fa59-49f7-98e6-c17380747357",
+        "title": "【通識微學分認證學生報名專用】 高科大典藏作品展—寫實藝術之當代觀點",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260223173726pJHiG2",
+        "keywords": ["通識微學分", "典藏展", "寫實藝術"]
+      },
+      {
+        "uuid": "1ad4409f-3bd4-44b1-a664-84ebb0b96ed8",
+        "title": "確定開班 會計事務資訊項丙級檢定證照輔導（線上課程）",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=2026033112573879x00S",
+        "keywords": ["會計事務", "丙級檢定", "證照輔導", "線上課程"]
+      },
+      {
+        "uuid": "501270e6-c7ce-4800-8d49-209756f2f33e",
+        "title": "從零開始的自學：友你才好玩",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260401143224dL5OCv",
+        "keywords": ["自學", "學生社群"]
+      },
+      {
+        "uuid": "007b7b0d-1a27-4b4a-820c-6b2606d6bd51",
+        "title": "114-2《第一校區》身心科醫師諮詢(採預約制，報名後等待確認訊息)",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260225103142qqE8h4",
+        "keywords": ["114-2", "第一校區", "身心科醫師", "諮詢", "預約"]
+      },
+      {
+        "uuid": "a3077d19-d0f4-4fa4-a85e-a7217bb44914",
+        "title": "會計事務資訊項丙級檢定證照輔導（線上課程）",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260205125145H26E59",
+        "keywords": ["會計事務", "丙級檢定", "證照輔導", "線上課程"]
+      },
+      {
+        "uuid": "7c1fd40f-64b5-48ee-90d2-849378913b56",
+        "title": "114-2《楠梓校區》身心科醫師駐診諮詢 來囉~",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20250721111216hrC5Tq",
+        "keywords": ["楠梓校區", "身心科醫師", "駐診諮詢"]
+      },
+      {
+        "uuid": "9a2fb6cd-e265-410f-9819-f32845a38d38",
+        "title": "114學年高科大第一校區諮輔組《紓壓祭》大木神社の祝福",
+        "link": "https://ws1.nkust.edu.tw/Activity/Home/Event?Sno=20260309142108vX911i",
+        "keywords": ["高科大", "諮輔組", "紓壓祭"]
+      }
+    ]
+  },
+  {
+    "source_name": "全部公告  - 正修科技大學 Cheng Shiu University",
+    "source_link": "https://www.csu.edu.tw/p/403-1000-13-1.php?Lang=zh-tw",
+    "total_count": 12,
+    "data": [
+      {
+        "uuid": "a4af9d42-16b9-4a22-a385-547f895028e2",
+        "title": "正修科技大學115級畢業典禮直播",
+        "link": "https://www.csu.edu.tw/p/406-1000-28513,r13.php?Lang=zh-tw",
+        "keywords": ["畢業典禮", "直播"]
+      },
+      {
+        "uuid": "3781958d-b83a-46c2-a90b-1c48af31fc62",
+        "title": "正修科技大學115年度第3期【推廣教育班】招生簡章",
+        "link": "https://cec.csu.edu.tw/p/404-1084-28438.php?Lang=zh-tw",
+        "keywords": ["推廣教育班", "招生", "簡章"]
+      },
+      {
+        "uuid": "0e8155c7-b2c7-4811-98d1-d8c17e446310",
+        "title": "新北市政府警察局辦理「共植三一廉政安定樹（Rooted in Trintegrity）反貪倡廉有獎徵答活動」",
+        "link": "https://www.csu.edu.tw/p/406-1000-28289,r13.php?Lang=zh-tw",
+        "keywords": ["反貪倡廉", "有獎徵答", "新北市警察局"]
+      },
+      {
+        "uuid": "b748c887-6b09-424d-8b7c-0392ba0f84b5",
+        "title": "115年【營建科技中心-工地主任班】營造業工地主任220小時訓練課程-內政部國土管理署委辦",
+        "link": "https://www.csu.edu.tw/p/406-1000-12103,r13.php?Lang=zh-tw",
+        "keywords": ["營建科技中心", "工地主任", "訓練課程"]
+      },
+      {
+        "uuid": "59fb795a-285f-41d7-a3bb-dca4f1720fe1",
+        "title": "【重要公告】115學年第1學期學生宿舍-文山學園申請住宿，即將開跑!!",
+        "link": "https://www.csu.edu.tw/p/406-1000-28144,r13.php?Lang=zh-tw",
+        "keywords": ["學生宿舍", "文山學園", "住宿申請"]
+      },
+      {
+        "uuid": "0bbe5ea2-2623-4b49-9a7f-77cdb6ceab2f",
+        "title": "115級《日間部》畢業典禮公告",
+        "link": "https://www.csu.edu.tw/p/406-1000-28094,r13.php?Lang=zh-tw",
+        "keywords": ["畢業典禮", "日間部"]
+      },
+      {
+        "uuid": "1d4a4ac3-1c57-48b1-afb3-e383f2263888",
+        "title": "ESG永續發展與淨零碳管理人才培訓班第01期",
+        "link": "https://cec.csu.edu.tw/p/406-1084-28065,r35.php?Lang=zh-tw",
+        "keywords": ["ESG", "永續發展", "淨零碳", "人才培訓"]
+      },
+      {
+        "uuid": "5ff271e3-30bc-47ff-aeef-5133ac6c2c62",
+        "title": "115年【營建科技中心-品管訓練班】公共工程品質管理訓練班-行政院公共工程委員會委辦",
+        "link": "https://www.csu.edu.tw/p/406-1000-12111,r13.php?Lang=zh-tw",
+        "keywords": ["品管訓練", "公共工程", "營建科技中心"]
+      },
+      {
+        "uuid": "be6d0361-4cbd-4225-90e0-1ddafe52e41d",
+        "title": "【重要公告】 114學年度第2學期全校週會",
+        "link": "https://www.csu.edu.tw/p/406-1000-27819,r13.php?Lang=zh-tw",
+        "keywords": ["全校週會", "重要公告"]
+      },
+      {
+        "uuid": "ead1b7e8-3639-46df-ac30-8e9eed6897d0",
+        "title": "【重要公告】【114-2學期】日間部班級幹部研習，訂於2/23日及2/25日舉行，請各班級幹部準時參加!",
+        "link": "https://www.csu.edu.tw/p/406-1000-26185,r13.php?Lang=zh-tw",
+        "keywords": ["班級幹部", "研習", "日間部"]
+      },
+      {
+        "uuid": "50899bda-5c52-4986-bd72-204681eae5ab",
+        "title": "國家發展委員會「促進轉型正義基金補助民間試辦作業」申請",
+        "link": "https://www.csu.edu.tw/p/406-1000-26157,r13.php?Lang=zh-tw",
+        "keywords": ["國家發展委員會", "轉型正義", "基金補助", "民間試辦"]
+      },
+      {
+        "uuid": "39c3ae2d-be19-490b-8f5d-a9578c305b7d",
+        "title": "教育部全民安全指引專區調查表",
+        "link": "https://www.csu.edu.tw/p/406-1000-26118,r13.php?Lang=zh-tw",
+        "keywords": ["教育部", "全民安全指引", "調查表"]
+      }
+    ]
+  }
+]
