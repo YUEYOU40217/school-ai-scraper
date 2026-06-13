@@ -7,8 +7,8 @@ from datetime import datetime
 from google import genai
 from urllib.parse import urljoin
 
-MAX_RAW_LIMIT = 100 
-BATCH_SIZE = 10 
+MAX_RAW_LIMIT = 1000 
+BATCH_SIZE = 20 
 
 def format_json_keywords(json_str):
     pattern = r'"keywords":\s*\[\s*([^\]]*?)\s*\]'
