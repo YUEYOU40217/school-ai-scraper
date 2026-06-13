@@ -33,7 +33,7 @@
 
 
 
-### 3. 打开 API 網址 (GitHub Pages)
+### 3. 打開 API 網址 (GitHub Pages)
 
 * 進入 Settings -> Pages
 * 在 Build and deployment -> Source 選擇 Deploy from a branch。
