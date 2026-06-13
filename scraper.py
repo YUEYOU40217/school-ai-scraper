@@ -3,7 +3,7 @@ import os
 import re
 import uuid
 import utils
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from google import genai
 from urllib.parse import urljoin
 
@@ -35,21 +35,7 @@ def main():
     with open("config.json", "r", encoding="utf-8") as f:
         config = json.load(f)
 
-    tz_tw = timezone(timedelta(hours=8))
-    now_tw = datetime.now(tz_tw)
-    current_hour = now_tw.hour
-    current_minute = now_tw.minute
-
-    scheduled_hours = config.get("scheduled_hours", [])
-    
-    is_on_time = current_hour in scheduled_hours
-    is_delayed_but_valid = ((current_hour - 1) % 24) in scheduled_hours and current_minute < 30
-
-    if scheduled_hours and not (is_on_time or is_delayed_but_valid):
-        print(f"目前台灣時間為 {current_hour:02d}:{current_minute:02d}，非設定的執行時段 {scheduled_hours}，跳過本次執行。")
-        return
-
-    print(f"安全檢查通過。當前台灣時間: {current_hour:02d}:{current_minute:02d}，開始執行爬蟲任務。")
+    print("開始執行爬蟲任務。")
 
     existing_uuid_map = {}
     history_file = "announcements.json"
