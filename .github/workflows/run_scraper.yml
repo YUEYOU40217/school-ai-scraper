@@ -15,8 +15,10 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-cache-dependency-path: '**/requirements.txt'
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: '**/requirements.txt'
+
 
       - name: Install dependencies
         run: |
