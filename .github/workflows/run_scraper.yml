@@ -1,44 +1,36 @@
-name: AI Scraper
+name: Run Scraper
 
 on:
   schedule:
     - cron: '20 * * * *'
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  scrape:
+  run-scraper:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-cache-dependency-path: '**/requirements.txt'
+          python-version: '3.11'
 
-    # 這裡改成讀取 requirements.txt，保持程式碼整潔
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: Run Scraper
-      env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      run: python scraper.py
+      - name: Run python script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python scraper.py
 
-    # 部署到 gh-pages 分支，保持 main 分支乾淨
-    - name: Deploy JSON to GitHub Pages
-      uses: JamesIves/github-pages-deploy-action@v4
-      with:
-        folder: .
-        branch: gh-pages
-        target-folder: .
-        single-commit: true
-        git-config-name: github-actions[bot]
-        git-config-email: 41898282+github-actions[bot]@users.noreply.github.com
-        
+      - name: Commit and Push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add announcements.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update: incremental sync and UUID lock" && git push)
