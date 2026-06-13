@@ -2,7 +2,6 @@ name: Run Scraper
 
 on:
   schedule:
-    # 台灣時間 10:37, 18:37, 02:37 發車（一天三次，避免被 GitHub 降等排隊）
     - cron: '37 2,10,18 * * *'
   workflow_dispatch:
 
@@ -10,11 +9,9 @@ jobs:
   run-scraper:
     runs-on: ubuntu-latest
     steps:
-      # 1. 抓取主分支的程式碼（scraper.py 等）
       - name: Checkout main branch
         uses: actions/checkout@v4
 
-      # 2. 設定 Python 環境與快取
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -22,34 +19,36 @@ jobs:
           cache: 'pip'
           cache-dependency-path: '**/requirements.txt'
 
-      # 3. 安裝套件
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      # 4. 執行爬蟲，產出最新的 announcements.json
+      # 👇 關鍵新增：從 gh-pages 拿回昨天的記憶
+      - name: Fetch old data from gh-pages
+        run: |
+          git fetch origin gh-pages || true
+          # 嘗試把 gh-pages 的 json 複製過來，如果沒有（第一次執行）就不理它
+          git show origin/gh-pages:announcements.json > announcements.json || true
+
       - name: Run python script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scraper.py
 
-      # 5. 跨分支搬運：把 JSON 塞進 gh-pages 分支並推送
       - name: Commit and Push to gh-pages
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # 先把剛剛辛苦抓好的 json 複製到系統暫存區
+          # 暫存最新的 json
           cp announcements.json /tmp/announcements.json
           
-          # 切換到遠端的 gh-pages 分支
-          git fetch origin gh-pages
-          git checkout gh-pages
+          # 切換到 gh-pages 分支 (如果沒有這個分支就自動建立)
+          git checkout gh-pages || git checkout -b gh-pages
           
-          # 把最新的 json 覆蓋回來 gh-pages 分支
+          # 覆蓋最新資料
           cp /tmp/announcements.json announcements.json
           
-          # 提交並推回 gh-pages
           git add announcements.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update: sync data to gh-pages" && git push origin gh-pages)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update: sync data and retain UUIDs" && git push origin gh-pages)
