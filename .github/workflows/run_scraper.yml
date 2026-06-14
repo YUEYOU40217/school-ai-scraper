@@ -2,7 +2,7 @@ name: Run Scraper
 
 on:
   schedule:
-    - cron: '37 * * * *'
+    - cron: '18 1,9,17 * * *'
   workflow_dispatch:
 
 jobs:
@@ -32,6 +32,7 @@ jobs:
       - name: Run python script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
         run: python scraper.py
 
       - name: Commit and Push to gh-pages
