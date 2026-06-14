@@ -4,15 +4,11 @@
   "sites": [
     {
       "name": "正修科技大學",
-      "url": "[https://www.csu.edu.tw/p/403-1000-13-1.php?Lang=zh-tw](https://www.csu.edu.tw/p/403-1000-13-1.php?Lang=zh-tw)",
-      "url_template": "[https://www.csu.edu.tw/p/403-1000-13-](https://www.csu.edu.tw/p/403-1000-13-){page}.php?Lang=zh-tw",
-      "max_pages": 3
+      "url": "[https://www.csu.edu.tw/p/403-1000-13-1.php?Lang=zh-tw](https://www.csu.edu.tw/p/403-1000-13-1.php?Lang=zh-tw)"
     },
     {
       "name": "國立高雄科技大學第一校區",
-      "url": "[https://ws1.nkust.edu.tw/Activity/](https://ws1.nkust.edu.tw/Activity/)",
-      "url_template": "[https://ws1.nkust.edu.tw/Activity/?page=](https://ws1.nkust.edu.tw/Activity/?page=){page}",
-      "max_pages": 3
+      "url": "[https://ws1.nkust.edu.tw/Activity/](https://ws1.nkust.edu.tw/Activity/)"
     }
   ]
 }
