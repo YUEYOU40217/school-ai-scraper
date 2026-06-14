@@ -12,6 +12,7 @@ import re
 import os
 from urllib.parse import urljoin
 
+# 關閉常規警告文字
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def get_robust_session():
@@ -27,36 +28,45 @@ def get_robust_session():
 session = get_robust_session()
 
 def fetch_links_smart(target_url):
-    """【單頁全抓版】破防連線並撈取網頁中所有帶有日期的公告連結"""
+    """【無過濾全面撈取版】自動尋找網頁中可能的公告連結與其上下文資訊"""
     resp_text = None
     scraper_api_key = os.environ.get("SCRAPER_API_KEY")
     
+    # 優先防線：使用 Scraper API 代理連線
     if scraper_api_key:
-        print(f"[跳板模式] 正在透過 Scraper API 連線: {target_url}")
-        proxy_url = "[https://api.scraperapi.com/](https://api.scraperapi.com/)"
-        payload = {'api_key': scraper_api_key, 'url': target_url}
+        print(f"[跳板模式] 正在透過 Scraper API 連線至: {target_url}")
+        proxy_url = "https://api.scraperapi.com/"
+        payload = {
+            'api_key': scraper_api_key,
+            'url': target_url
+        }
         try:
             resp = requests.get(proxy_url, params=payload, timeout=30)
             if resp.status_code == 200:
                 resp.encoding = resp.apparent_encoding
                 resp_text = resp.text
-        except Exception:
-            pass
+                print("[跳板模式] 成功取得網頁原始碼。")
+            else:
+                print(f"[跳板模式失敗] 狀態碼: {resp.status_code}，切換回原有機制...")
+        except Exception as e:
+            print(f"[跳板模式異常] 錯誤原因: {e}，切換回原有機制...")
 
+    # 原有三重保險連線機制
     if not resp_text:
         try:
             resp = session.get(target_url, timeout=15, verify=False)
             resp.encoding = resp.apparent_encoding
             resp_text = resp.text
         except Exception as e:
-            print(f" [第一彈連線失敗] 原因: {e}，切換獨立模式...")
+            print(f" [第一彈 Session 連線失敗] 錯誤原因: {e}，切換獨立模式...")
             try:
                 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
                 resp = requests.get(target_url, headers=headers, timeout=15, verify=False)
                 resp.encoding = resp.apparent_encoding
                 resp_text = resp.text
             except Exception as e2:
-                print(f"[第二彈連線失敗] 原因: {e2}，切換終極 urllib...")
+                print(f"[第二彈 獨立連線也失敗] 錯誤原因: {e2}。")
+                print("[啟動終極第三彈] 使用底層 urllib 強行突破...")
                 try:
                     context = ssl._create_unverified_context()
                     req = urllib.request.Request(
@@ -71,56 +81,50 @@ def fetch_links_smart(target_url):
                             resp_text = raw_data.decode('big5', errors='ignore')
                     print("[終極第三彈] 成功強行突破限制！")
                 except Exception as e3:
-                    print(f"[三重保險皆失敗] 無法連線: {e3}")
+                    print(f"[三重保險皆失敗] 該網址真的無法連線: {e3}")
                     return "抓取失敗", []
 
     try:
         soup = BeautifulSoup(resp_text, "html.parser")
         source_name = soup.title.get_text(strip=True) if soup.title else "未命名網頁"
-        
-        # 移除沒用的網頁元件雜訊
-        for el in soup(["script", "style", "nav", "footer", "header"]):
-            el.extract()
-            
         links = []
         seen_urls = set()
         all_a_tags = soup.find_all('a')
         
-        garbage_words = ["跳到", "主要內容", "previous", "next", "首頁", "返回", "coreui", "登入"]
+        # 移除過於激進的垃圾詞過濾（如 "首頁"），只保留跳過內容區的導覽詞
+        garbage_words = ["跳到", "主要內容區", "跳至主要內容"]
         
         for a_tag in all_a_tags:
             href = a_tag.get('href')
             title = a_tag.get_text(strip=True)
             
-            if not href or not title or len(title) < 5: 
+            if not href or not title or len(title) < 2:  # 放寬標題長度限制
                 continue
                 
-            if href.startswith('#') or href.startswith('javascript:') or any(w in title.lower() for w in garbage_words):
+            if href.startswith('#') or any(w in title.lower() for w in garbage_words):
                 continue
                 
             full_url = urljoin(target_url, href)
             if full_url in seen_urls: 
                 continue
                 
+            # 撈取該 A 標籤周圍（往上三層）的所有文字，作為 AI 判斷日期與年份的依據
             parent = a_tag.parent
             row_text = ""
-            date_str = "0000-00-00"
-            
-            # 向上查找 3 層找日期
             for _ in range(3):
                 if parent:
                     row_text = parent.get_text(separator=' ', strip=True)
-                    date_match = re.search(r'(\d{2,4}[-/]\d{1,2}[-/]\d{1,2})', row_text)
-                    if date_match:
-                        date_str = date_match.group(1)
+                    if len(row_text) > len(title):
                         break
                     parent = parent.parent
             
-            if date_str == "0000-00-00":
-                continue
+            # 【關鍵修改】：不再因為找不到日期格式而 continue 丟棄！
+            # 改為盡量從 row_text 中抽離出日期，抽不到就保留 row_text 讓 AI 去看
+            date_match = re.search(r'(\d{2,4}[-/]\d{1,2}[-/]\d{1,2})', row_text)
+            date_str = date_match.group(1) if date_match else "未偵測到日期"
                 
             links.append({
-                "title": title.strip(), 
+                "title": title, 
                 "href": href, 
                 "row_text": row_text,
                 "date": date_str
@@ -129,12 +133,12 @@ def fetch_links_smart(target_url):
                     
         return source_name, links
     except Exception as e:
-        print(f"解析失敗: {e}")
+        print(f"抓取清單解析失敗: {e}")
         return "抓取失敗", []
 
-def process_ai_batch(titles_list, template, client, allowed_years_str):
-    prompt = template.replace("{allowed_years}", allowed_years_str)
-    prompt = prompt.replace("{batch_input}", "\n".join([f"{i+1}. {title}" for i, title in enumerate(titles_list)]))
+def process_ai_batch(titles_list, template, client):
+    """將包含上下文與標題的資訊打包送給 Gemini，並嚴格要求回傳對應格式的 JSON"""
+    prompt = template.replace("{batch_input}", "\n".join([f"{i+1}. {item}" for i, item in enumerate(titles_list)]))
     try:
         response = client.models.generate_content(
             model='gemini-3.1-flash-lite',
@@ -156,4 +160,7 @@ def process_ai_batch(titles_list, template, client, allowed_years_str):
             
     except Exception as e:
         print(f"AI 批次解析錯誤: {e}")
-        return [{"is_valid": False, "keywords": ["解析失敗"]} for _ in titles_list]
+        if 'response' in locals() and hasattr(response, 'text'):
+            print(f"【AI 原始回覆內容】:\n{response.text}")
+            
+        return [{"keywords": ["解析失敗"], "is_allowed_year": False, "extracted_date": "1970-01-01"} for _ in titles_list]
