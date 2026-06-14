@@ -11,6 +11,7 @@ MAX_RAW_LIMIT = 1000
 BATCH_SIZE = 20 
 
 def format_json_keywords(json_str):
+    """壓縮關鍵字陣列排版為單行，使 JSON 檔更易於閱讀"""
     pattern = r'"keywords":\s*\[\s*([^\]]*?)\s*\]'
     def replace_func(match):
         items = match.group(1).split('\n')
@@ -20,28 +21,27 @@ def format_json_keywords(json_str):
     return re.sub(pattern, replace_func, json_str, flags=re.DOTALL)
 
 def clean_and_parse_date(date_str):
+    """將西元格式字串解析為 datetime 物件，供排序使用"""
     try:
         nums = [int(s) for s in re.findall(r'\d+', date_str)]
         if len(nums) < 3:
             return datetime(1970, 1, 1)
-        year, month, day = nums[0], nums[1], nums[2]
-        if year < 200:
-            year += 1911
-        return datetime(year, month, day)
+        return datetime(nums[0], nums[1], nums[2])
     except:
         return datetime(1970, 1, 1)
 
 def main():
+    # 讀取設定檔
     with open("config.json", "r", encoding="utf-8") as f:
         config = json.load(f)
 
-    print("開始執行指定網頁全量爬取任務。")
+    print("開始執行爬蟲任務。")
 
     history_site_backup = {} 
     existing_uuid_map = {}
     history_file = "announcements.json"
     
-    # 載入歷史紀錄防止檔案被清空
+    # 載入歷史資料以維持 UUID 的一致性，並建立斷線備援還原點
     if os.path.exists(history_file):
         try:
             with open(history_file, "r", encoding="utf-8") as f:
@@ -53,70 +53,60 @@ def main():
                     for item in site_info.get("data", []):
                         if "link" in item and "uuid" in item:
                             existing_uuid_map[item["link"]] = item["uuid"]
-            print(f"成功載入歷史資料，保留 {len(existing_uuid_map)} 筆 UUID。")
+            print(f"成功載入歷史資料，共記憶了 {len(existing_uuid_map)} 筆現有的 UUID 對照。")
         except Exception as e:
-            print(f"讀取歷史 json 失敗: {e}")
+            print(f"讀取歷史 json 失敗或格式不符，將視為全新資料處理。錯誤原因: {e}")
 
-    allowed_years = config.get("allowed_years", [2025, 2026])
-    allowed_years_str = ", ".join(map(str, allowed_years))
-    
-    year_keywords = []
-    for y in allowed_years:
-        year_keywords.append(str(y))          
-        year_keywords.append(str(y - 1911))   
-    
+    # 初始化 Google GenAI 用戶端
     client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-    all_extracted_records = []
+    
+    raw_scraped_log = []       # 用於儲存完全未過濾的原始爬取日誌
+    all_extracted_records = []  # 用於儲存經 AI 驗證年份過關的公告
 
     for site in config.get("sites", []):
         target_url = site['url']
         site_name = site['name']
         
-        print(f"正在爬取網站: {site_name}")
+        print(f"啟動網站處理: {site_name}")
         source_name, all_links = utils.fetch_links_smart(target_url)
         
         if not all_links:
             print(f"警告：{site_name} 未能偵測到任何公告，跳過本次抓取。")
             continue
 
-        valid_items = []
-        out_of_range_count = 0 
+        # 1. 毫無過濾地將原始爬取資訊寫入日誌物件
+        raw_scraped_log.append({
+            "site_name": site_name,
+            "url": target_url,
+            "total_raw_found": len(all_links),
+            "links": all_links[:MAX_RAW_LIMIT]
+        })
 
-        # 篩選年份
-        for item in all_links[:MAX_RAW_LIMIT]:
-            is_valid_year = any(k in item['row_text'] for k in year_keywords)
+        valid_items = all_links[:MAX_RAW_LIMIT]
 
-            if not is_valid_year:
-                out_of_range_count += 1
-                if out_of_range_count >= 3:
-                    print(f"[{site_name}] 偵測到舊年份區，阻斷該網站後續處理。")
-                    break
-                continue
-            
-            out_of_range_count = 0
-            valid_items.append(item)
-
-        print(f"[{site_name}] 有效公告共 {len(valid_items)} 筆，開始分批打包送交 AI。")
+        print(f"[{site_name}] 原始抓取共 {len(valid_items)} 筆，開始進行每 {BATCH_SIZE} 筆分批打包送給 AI 解析與年份過濾。")
         
-        # 呼叫 Gemini AI
+        # 2. 將含有標題與上下文 row_text 的資料批次打包發給 Gemini AI
         for i in range(0, len(valid_items), BATCH_SIZE):
             batch = valid_items[i : i + BATCH_SIZE]
-            batch_titles = [item['title'] for item in batch]
             
-            batch_ai_results = utils.process_ai_batch(batch_titles, config['prompt_template'], client, allowed_years_str)
+            # 包裹上下文資訊提供 AI 充足的推導日期線索
+            batch_inputs_for_ai = [f"標題: {item['title']} | 周邊文字: {item['row_text']}" for item in batch]
+            
+            print(f"[{site_name}] 正在發送批次請求 (當前打包共 {len(batch_inputs_for_ai)} 筆)。")
+            batch_ai_results = utils.process_ai_batch(batch_inputs_for_ai, config['prompt_template'], client)
             
             for idx, item in enumerate(batch):
                 full_url = urljoin(target_url, item['href'])
-                keywords = ["解析失敗"]
-                is_valid_announcement = True
                 
-                if idx < len(batch_ai_results):
-                    ai_res = batch_ai_results[idx]
-                    keywords = ai_res.get("keywords", ["解析失敗"])
-                    if "is_valid" in ai_res and ai_res["is_valid"] is False:
-                        is_valid_announcement = False
+                # 讀取 AI 判定的結果
+                ai_res = batch_ai_results[idx] if idx < len(batch_ai_results) else {}
+                is_allowed = ai_res.get("is_allowed_year", True) 
+                extracted_date = ai_res.get("extracted_date", "1970-01-01")
+                keywords = ai_res.get("keywords", ["解析失敗"])
                 
-                if not is_valid_announcement:
+                # 如果 AI 判定該公告不屬於允許年份（如過往舊公告），在此直接過濾排除
+                if not is_allowed:
                     continue
                 
                 all_extracted_records.append({
@@ -126,13 +116,20 @@ def main():
                     "link": full_url,
                     "keywords": keywords,
                     "raw_date": item['date'],
-                    "parsed_datetime": clean_and_parse_date(item['date'])
+                    "extracted_date_str": extracted_date,
+                    "parsed_datetime": clean_and_parse_date(extracted_date)
                 })
 
-    # 時間排序與儲存維護
+    # 3. 將最原始無修剪的爬蟲內容寫入 raw_scraped.json，方便對照與 Debug
+    with open("raw_scraped.json", "w", encoding="utf-8") as rf:
+        json.dump(raw_scraped_log, rf, ensure_ascii=False, indent=2)
+    print("已成功將原始爬取內容寫入 raw_scraped.json 供檢查。")
+
+    # 4. 依照 AI 標準化的西元日期進行由新到舊排序
     all_extracted_records.sort(key=lambda x: x['parsed_datetime'], reverse=True)
 
     site_data_map = {}
+    
     for rec in all_extracted_records:
         src_url = rec['source_link']
         if src_url not in site_data_map:
@@ -156,13 +153,15 @@ def main():
             "keywords": rec['keywords']
         })
 
-    # 備份還原安全關卡
+    # 🛡️ 備援機制：如果某網站本次連線或抓取完全失敗，從歷史記錄還原防止最終檔案被清空
     for site in config.get("sites", []):
         target_url = site['url']
         if target_url not in site_data_map:
             if target_url in history_site_backup:
-                print(f"🛡️  [安全機制啟動] {site['name']} 本次抓取失敗，已從歷史紀錄還原舊有公告！")
+                print(f"🛡️  [安全機制啟動] 偵測到 {site['name']} 本次連線或抓取失敗。已成功從歷史紀錄中還原舊有公告！")
                 site_data_map[target_url] = history_site_backup[target_url]
+            else:
+                print(f"ℹ️  {site['name']} 本次無新資料且歷史無紀錄，略過。")
 
     final_output = []
     for site_info in site_data_map.values():
@@ -176,10 +175,11 @@ def main():
     raw_json = json.dumps(final_output, ensure_ascii=False, indent=2)
     final_json = format_json_keywords(raw_json)
 
+    # 輸出最終精煉與 AI 年份篩選後的公告檔
     with open("announcements.json", "w", encoding="utf-8") as f:
         f.write(final_json)
         
-    print("指定學校資料已全部更新並安全寫入 announcements.json。")
+    print("全部網站處理完畢，已成功更新資料並寫入 announcements.json。")
 
 if __name__ == "__main__":
     main()
