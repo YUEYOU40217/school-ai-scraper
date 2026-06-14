@@ -150,7 +150,24 @@ def process_ai_batch(titles_list, template, client):
                 response_mime_type="application/json",
             )
         )
-        return json.loads(response.text.strip())
+        
+        # --- 強化版 JSON 解析防線 ---
+        raw_text = response.text.strip()
+        start_idx = raw_text.find('[')
+        end_idx = raw_text.rfind(']')
+        
+        if start_idx != -1 and end_idx != -1:
+            # 強制只切出 [ 到 ] 之間的內容
+            clean_json_str = raw_text[start_idx:end_idx + 1]
+            return json.loads(clean_json_str)
+        else:
+            # 如果連括號都找不到，就硬著頭皮解析看看，失敗會直接跳到 except
+            return json.loads(raw_text)
+            
     except Exception as e:
         print(f"AI 批次解析錯誤: {e}")
+        # 關鍵除錯神器：印出 AI 到底回了什麼鬼東西
+        if 'response' in locals() and hasattr(response, 'text'):
+            print(f"【AI 原始回覆內容】:\n{response.text}")
+            
         return [{"keywords": ["解析失敗"]} for _ in titles_list]
