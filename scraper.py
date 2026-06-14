@@ -35,9 +35,8 @@ def main():
     with open("config.json", "r", encoding="utf-8") as f:
         config = json.load(f)
 
-    print("開始執行爬蟲任務。")
+    print("開始執行全自動攻頂爬蟲任務。")
 
-    # 🛠️ 【修改點 1】新增一個字典，用來完整備份歷史 json 中的各校公告資料
     history_site_backup = {} 
     existing_uuid_map = {}
     history_file = "announcements.json"
@@ -47,7 +46,6 @@ def main():
             with open(history_file, "r", encoding="utf-8") as f:
                 history_data = json.load(f)
                 for site_info in history_data:
-                    # 以網站網址當 Key，把整包舊資料暫存起來
                     if "source_link" in site_info:
                         history_site_backup[site_info["source_link"]] = site_info
                         
@@ -56,9 +54,11 @@ def main():
                             existing_uuid_map[item["link"]] = item["uuid"]
             print(f"成功載入歷史資料，共記憶了 {len(existing_uuid_map)} 筆現有的 UUID 對照。")
         except Exception as e:
-            print(f"讀取歷史 json 失敗或格式不符，將視為全新資料處理。錯誤原因: {e}")
+            print(f"讀取歷史 json 失敗，將視為全新資料處理。錯誤原因: {e}")
 
     allowed_years = config.get("allowed_years", [2025, 2026])
+    allowed_years_str = ", ".join(map(str, allowed_years))
+    
     year_keywords = []
     for y in allowed_years:
         year_keywords.append(str(y))          
@@ -68,50 +68,95 @@ def main():
     all_extracted_records = []
 
     for site in config.get("sites", []):
-        target_url = site['url']
+        base_url = site['url']
         site_name = site['name']
+        max_pages = site.get("max_pages", 1)
+        url_template = site.get("url_template", None)
         
-        print(f"啟動網站處理: {site_name}")
-        source_name, all_links = utils.fetch_links_smart(target_url)
+        print(f"\n🚀 處理網站: {site_name}")
         
-        if not all_links:
-            print(f"警告：{site_name} 未能偵測到任何公告，跳過本次抓取。")
+        combined_links = []
+        final_source_name = "未命名網頁"
+        target_page_urls = [base_url]
+
+        # 1. 換頁網址決策核心
+        if url_template:
+            # 如果 config 有寫死換頁公式，就用公式產生
+            target_page_urls = [url_template.replace("{page}", str(p)) for p in range(1, max_pages + 1)]
+            print(f"  [模式A] 使用指定公式產生了 {len(target_page_urls)} 個分頁網址。")
+        else:
+            # 如果 config 沒寫公式，啟動「黑科技」：先抓第一頁，讓程式自動從 HTML 去撈出後面分頁
+            print(f"  [模式B] 未指定公式，啟動 AI 級智慧尋頁探測...")
+            first_name, first_links, first_soup = utils.fetch_links_smart(base_url)
+            if first_soup:
+                target_page_urls = utils.find_next_page_urls(first_soup, base_url, max_pages=max_pages)
+            print(f"  [探測結果] 成功自動通靈出分頁網址共 {len(target_page_urls)} 頁：{target_page_urls}")
+
+        # 2. 執行跨頁撈取
+        seen_titles_or_urls = set()
+        for idx, page_url in enumerate(target_page_urls):
+            print(f"  正在抓取第 {idx+1} 頁: {page_url}")
+            source_name, page_links, _ = utils.fetch_links_smart(page_url)
+            
+            if not page_links or source_name == "抓取失敗":
+                continue
+                
+            final_source_name = source_name
+            
+            # 過濾重覆抓到的東西
+            for lk in page_links:
+                unique_key = lk["title"] + lk["href"]
+                if unique_key not in seen_titles_or_urls:
+                    combined_links.append(lk)
+                    seen_titles_or_urls.add(unique_key)
+        
+        if not combined_links:
+            print(f"  警告：{site_name} 所有分頁皆未偵測到任何公告。")
             continue
 
+        # 3. 跨頁大名單年份阻斷
         valid_items = []
         out_of_range_count = 0 
 
-        for item in all_links[:MAX_RAW_LIMIT]:
+        for item in combined_links[:MAX_RAW_LIMIT]:
             is_valid_year = any(k in item['row_text'] for k in year_keywords)
 
             if not is_valid_year:
                 out_of_range_count += 1
                 if out_of_range_count >= 3:
-                    print(f"[{site_name}] 偵測到已進入舊年份資料區，停止該網站後續處理。")
+                    print(f"  [{site_name}] 進入舊年份歷史資料區，啟動安全阻斷機制。")
                     break
                 continue
             
             out_of_range_count = 0
             valid_items.append(item)
 
-        print(f"[{site_name}] 合格公告共 {len(valid_items)} 筆，開始進行每 {BATCH_SIZE} 筆分批打包解析。")
+        print(f"  [{site_name}] 跨頁合格公告共 {len(valid_items)} 筆，開始進行每 {BATCH_SIZE} 筆分批打包解析。")
         
+        # 4. Gemini AI 解析防線
         for i in range(0, len(valid_items), BATCH_SIZE):
             batch = valid_items[i : i + BATCH_SIZE]
             batch_titles = [item['title'] for item in batch]
             
-            print(f"[{site_name}] 正在發送批次請求 (當前打包共 {len(batch_titles)} 筆)。")
-            batch_ai_results = utils.process_ai_batch(batch_titles, config['prompt_template'], client)
+            batch_ai_results = utils.process_ai_batch(batch_titles, config['prompt_template'], client, allowed_years_str)
             
             for idx, item in enumerate(batch):
-                full_url = urljoin(target_url, item['href'])
+                full_url = urljoin(base_url, item['href'])
                 keywords = ["解析失敗"]
+                is_valid_announcement = True
+                
                 if idx < len(batch_ai_results):
-                    keywords = batch_ai_results[idx].get("keywords", ["解析失敗"])
+                    ai_res = batch_ai_results[idx]
+                    keywords = ai_res.get("keywords", ["解析失敗"])
+                    if "is_valid" in ai_res and ai_res["is_valid"] is False:
+                        is_valid_announcement = False
+                
+                if not is_valid_announcement:
+                    continue
                 
                 all_extracted_records.append({
-                    "source_name": source_name,
-                    "source_link": target_url, # 確保這裡使用 target_url 一致性
+                    "source_name": final_source_name,
+                    "source_link": base_url, 
                     "title": item['title'],
                     "link": full_url,
                     "keywords": keywords,
@@ -119,10 +164,10 @@ def main():
                     "parsed_datetime": clean_and_parse_date(item['date'])
                 })
 
+    # 5. 全網站跨校大排序與 UUID 記憶體維護
     all_extracted_records.sort(key=lambda x: x['parsed_datetime'], reverse=True)
 
     site_data_map = {}
-    
     for rec in all_extracted_records:
         src_url = rec['source_link']
         if src_url not in site_data_map:
@@ -146,18 +191,15 @@ def main():
             "keywords": rec['keywords']
         })
 
-    # 🛠️ 【修改點 2】全新安全防線：比對設定檔，如果某間學校本次抓取失敗（沒出現在 site_data_map 中），就從歷史備份還原
+    # 6. 安全備份還原
     for site in config.get("sites", []):
         target_url = site['url']
         if target_url not in site_data_map:
             if target_url in history_site_backup:
-                print(f"🛡️  [安全機制啟動] 偵測到 {site['name']} 本次連線或抓取失敗。已成功從歷史紀錄中還原舊有公告，防止檔案被清空！")
+                print(f"🛡️  [安全機制] {site['name']} 本次抓取異常，已從歷史紀錄中完整還原，防空檔保護成功！")
                 site_data_map[target_url] = history_site_backup[target_url]
-            else:
-                print(f"ℹ️  {site['name']} 本次無新資料且歷史無紀錄，略過。")
 
     final_output = []
-    
     for site_info in site_data_map.values():
         final_output.append({
             "source_name": site_info["source_name"],
@@ -172,7 +214,7 @@ def main():
     with open("announcements.json", "w", encoding="utf-8") as f:
         f.write(final_json)
         
-    print("全部網站處理完畢，已成功更新資料並寫入 announcements.json。")
+    print("\n🎉 狂賀！全自動跨頁大數據爬蟲任務圓滿完成，資料已成功存檔。")
 
 if __name__ == "__main__":
     main()
