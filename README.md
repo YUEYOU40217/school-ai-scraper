@@ -1,58 +1,45 @@
 # 學校公告自動化摘要 (School AI Scraper)
 
-透過 GitHub Actions 排程定時巡邏學校官網，利用 Gemini 3.1 Flash-Lite 深入公告內頁進行智慧摘要，並自動將成果發布至 gh-pages 分支，形成一個免費且全自動更新的網頁 API (announcements.json)直接讀取。
+本專案透過 GitHub Actions 定時自動爬取學校官網公告，搭配 Scraper API 突破校園防火牆限制，並利用 Gemini AI 批次進行智慧摘要。最終將整理好的資料生成一個持續更新的 `announcements.json` API，方便後續直接串接個人網頁或 LINE 機器人。 (⌐■_■)
 
 ---
 
-## 技術規格
+## 使用者自行設定指南
 
-* 基礎模型：Google Gemini 3.1 Flash-Lite (由 Google AI Studio 提供)
----
+如果你是初次部署，請至專案的 **Settings** (設定) 完成以下四個步驟，系統就會開始全自動運作：
 
-## 系統架構與文件敘述
+### 1. 開啟 Actions 寫入權限
 
-本系統由多個模組協同運作，核心控制主要由 scraper.py 負責，它處理歷史資料的 UUID 對照、排程檢查、年份過濾，並進行全域日期的最終降序大排序與存檔；底層的網路連線與 AI 引擎則由 utils.py 提供支援，內建底層 SSL 突破盾牌、智慧雜訊過濾器以及批次 AI JSON 生成器。整個系統的行為皆受到 config.json 控制中心的規範，裡面存放了目標學校網址，透過位於 GitHub Actions 排程設定檔，定時自動喚醒機器人執行上述完整的爬蟲與解析任務。
+* **路徑**：Settings -> Actions -> General
+* **設定**：滑到最底部的 Workflow permissions，選取 **Read and write permissions** 並存檔。（確保機器人能自動將爬取的資料推送到專案內）
 
----
+### 2. 填寫 API 金鑰 (Secrets)
 
-## 核心部署指南 (只需完成 3 個設定)
-
-要讓這套自動化產線完美運作，請至 GitHub 儲存庫的 Settings (齒輪) 完成以下設定：
-
-### 1. 開啟權限 (Workflow Permissions)
-
-* 進入 Settings -> Actions -> General
-* 滑到最底部，將 Workflow permissions 改為 Read and write permissions 並存檔（確保機器人能把資料寫入 gh-pages 分支）。
-
-### 2. 藏入金鑰 (Repository Secret)
-
-* 進入 Settings -> Secrets and variables -> Actions
-* 點擊 New repository secret：
-* Name: GEMINI_API_KEY
-* Value: 貼上從 Google AI Studio 免費申請的 API 金鑰。
+* **路徑**：Settings -> Secrets and variables -> Actions
+* **設定**：點擊 **New repository secret**，分別新增以下兩把金鑰：
+* `GEMINI_API_KEY`：你的 Google Gemini 授權碼。
+* `SCRAPER_API_KEY`：你的 Scraper API 跳板授權碼。
 
 
 
-### 3. 打開 API 網址 (GitHub Pages)
+### 3. 啟動 GitHub Pages 網址
 
-* 進入 Settings -> Pages
-* 在 Build and deployment -> Source 選擇 Deploy from a branch。
-* 在下方 Branch 選擇 gh-pages 分支，資料夾維持 / (root) 並存檔（開啟後即可獲得免費的 JSON API 網址）。
+* **路徑**：Settings -> Pages
+* **設定**：Source 選擇 **Deploy from a branch**，Branch 選擇 **gh-pages** 分支，資料夾選擇 `/ (root)` 並存檔。（設定完成後，你就會獲得一個公開且自動更新的 JSON 連結）
 
----
+### 4. 自訂你要爬的學校目標
 
-## 自定義配置 (config.json)
+直接打開專案目錄下的 `config.json`，填入你想抓取的年份限制與學校網址即可：
 
 ```json
 {
   "allowed_years": [2025, 2026],
   "sites": [
     {
-      "name": "正修科技大學",
-      "url": "https://www.csu.edu.tw/p/403-1000-13-1.php"
+      "name": "學校名稱",
+      "url": "你想抓取的公告網址"
     }
-  ],
-  "prompt_template": "請分析以下多則學校公告標題，並依序為每一則標題萃取出 1 到 5 個繁體中文關鍵字...{batch_input}"
+  ]
 }
 
 ```
