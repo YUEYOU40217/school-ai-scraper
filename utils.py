@@ -12,7 +12,6 @@ import re
 import os
 from urllib.parse import urljoin
 
-# 關閉常規警告文字
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def get_robust_session():
@@ -27,75 +26,67 @@ def get_robust_session():
 
 session = get_robust_session()
 
-def fetch_links_smart(target_url):
-    """【無格式盲猜版】自動尋找網頁中帶有日期的公告連結"""
+def fetch_raw_html(target_url):
+    """擁有三重突破保險的底層 HTML 抓取器"""
     resp_text = None
     scraper_api_key = os.environ.get("SCRAPER_API_KEY")
     
-    # 優先防線：使用 Scraper API 代理連線
     if scraper_api_key:
-        print(f"[跳板模式] 正在透過 Scraper API 連線至: {target_url}")
         proxy_url = "https://api.scraperapi.com/"
-        payload = {
-            'api_key': scraper_api_key,
-            'url': target_url
-        }
+        payload = {'api_key': scraper_api_key, 'url': target_url}
         try:
             resp = requests.get(proxy_url, params=payload, timeout=30)
             if resp.status_code == 200:
                 resp.encoding = resp.apparent_encoding
-                resp_text = resp.text
-                print("[跳板模式] 成功取得網頁原始碼。")
-            else:
-                print(f"[跳板模式失敗] 狀態碼: {resp.status_code}，切換回原有機制...")
-        except Exception as e:
-            print(f"[跳板模式異常] 錯誤原因: {e}，切換回原有機制...")
-
-    # 原有三重保險連線機制（當沒有金鑰或跳板失敗時做為備用防線）
-    if not resp_text:
-        try:
-            # 第一彈：常規 Session 連線
-            resp = session.get(target_url, timeout=15, verify=False)
-            resp.encoding = resp.apparent_encoding
-            resp_text = resp.text
-        except Exception as e:
-            print(f" [第一彈 Session 連線失敗] 錯誤原因: {e}，切換獨立模式...")
-            try:
-                # 第二彈：獨立 requests 連線
-                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-                resp = requests.get(target_url, headers=headers, timeout=15, verify=False)
-                resp.encoding = resp.apparent_encoding
-                resp_text = resp.text
-            except Exception as e2:
-                print(f"[第二彈 獨立連線也失敗] 錯誤原因: {e2}。")
-                print("[啟動終極第三彈] 使用底層 urllib 建立不驗證 SSL 上下文強行突破...")
-                try:
-                    # 第三彈：使用 Python 最底層的 urllib，並強制建立一個「完全不驗證」的 SSL Context
-                    context = ssl._create_unverified_context()
-                    req = urllib.request.Request(
-                        target_url, 
-                        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-                    )
-                    with urllib.request.urlopen(req, context=context, timeout=15) as response:
-                        raw_data = response.read()
-                        try:
-                            resp_text = raw_data.decode('utf-8')
-                        except UnicodeDecodeError:
-                            resp_text = raw_data.decode('big5', errors='ignore')
-                            
-                    print("[終極第三彈] 成功強行突破高科大 SSL 限制！")
-                except Exception as e3:
-                    print(f"[三重保險皆失敗] 該網址真的無法連線: {e3}")
-                    return "抓取失敗", []
+                return resp.text
+        except Exception:
+            pass
 
     try:
-        soup = BeautifulSoup(resp_text, "html.parser")
+        resp = session.get(target_url, timeout=15, verify=False)
+        resp.encoding = resp.apparent_encoding
+        return resp.text
+    except Exception:
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+            resp = requests.get(target_url, headers=headers, timeout=15, verify=False)
+            resp.encoding = resp.apparent_encoding
+            return resp.text
+        except Exception:
+            try:
+                context = ssl._create_unverified_context()
+                req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+                with urllib.request.urlopen(req, context=context, timeout=15) as response:
+                    raw_data = response.read()
+                    try:
+                        return raw_data.decode('utf-8')
+                    except UnicodeDecodeError:
+                        return raw_data.decode('big5', errors='ignore')
+            except Exception:
+                return None
+
+def clean_soup_garbage(soup):
+    """【黑科技】直接拔掉網頁的導航、頁尾、廣告與樣式，只留核心公告區"""
+    for element in soup(["script", "style", "nav", "footer", "header", "aside"]):
+        element.extract()
+    return soup
+
+def fetch_links_smart(target_url):
+    """【完全體盲猜版】自動尋找網頁中帶有日期的公告連結，並回傳原始碼與解析清單"""
+    html_text = fetch_raw_html(target_url)
+    if not html_text:
+        return "抓取失敗", [], None
+        
+    try:
+        soup = BeautifulSoup(html_text, "html.parser")
         source_name = soup.title.get_text(strip=True) if soup.title else "未命名網頁"
+        soup = clean_soup_garbage(soup)
+        
         links = []
         seen_urls = set()
         all_a_tags = soup.find_all('a')
         
-        garbage_words = ["跳到", "主要內容", "previous", "next", "首頁", "返回", "coreui"]
+        garbage_words = ["跳到", "主要內容", "previous", "next", "首頁", "返回", "coreui", "登入", "隱私權"]
         
         for a_tag in all_a_tags:
             href = a_tag.get('href')
@@ -104,7 +95,7 @@ def fetch_links_smart(target_url):
             if not href or not title or len(title) < 5: 
                 continue
                 
-            if href.startswith('#') or any(w in title.lower() for w in garbage_words):
+            if href.startswith('#') or href.startswith('javascript:') or any(w in title.lower() for w in garbage_words):
                 continue
                 
             full_url = urljoin(target_url, href)
@@ -128,20 +119,57 @@ def fetch_links_smart(target_url):
                 continue
                 
             links.append({
-                "title": title, 
+                "title": title.strip(), 
                 "href": href, 
                 "row_text": row_text,
                 "date": date_str
             })
             seen_urls.add(full_url)
                     
-        return source_name, links
+        return source_name, links, soup
     except Exception as e:
         print(f"抓取清單解析失敗: {e}")
-        return "抓取失敗", []
+        return "抓取失敗", [], None
 
-def process_ai_batch(titles_list, template, client):
-    prompt = template.replace("{batch_input}", "\n".join([f"{i+1}. {title}" for i, title in enumerate(titles_list)]))
+def find_next_page_urls(soup, current_url, max_pages=3):
+    """【AI級盲猜換頁】自動從網頁的頁碼按鈕中通靈出前 N 頁的完整網址"""
+    discovered_urls = [current_url]
+    if not soup or max_pages <= 1:
+        return discovered_urls
+        
+    all_a_tags = soup.find_all('a')
+    page_patterns = [
+        r'page=\d+', r'p=\d+', r'-\d+\.php', r'index_\d+'
+    ]
+    
+    # 尋找看起來像分頁的連結
+    for a_tag in all_a_tags:
+        href = a_tag.get('href', '')
+        text = a_tag.get_text(strip=True)
+        
+        if not href or href.startswith('#') or href.startswith('javascript:'):
+            continue
+            
+        full_url = urljoin(current_url, href)
+        if full_url in discovered_urls:
+            continue
+            
+        # 策略 1：如果文字本身就是數字 (例如 2, 3, 4) 且網址符合分頁特徵
+        if text.isdigit() and int(text) <= max_pages:
+            if any(re.search(pat, href.lower()) for pat in page_patterns):
+                discovered_urls.append(full_url)
+                
+        # 策略 2：如果文字寫著 "下一頁" 或 "Next"
+        elif any(w in text.lower() for w in ["下一頁", "next", "後一頁"]):
+            discovered_urls.append(full_url)
+
+    # 去重並依網址特徵做排序，確保順序大致符合 1 -> 2 -> 3
+    unique_urls = list(dict.fromkeys(discovered_urls))
+    return unique_urls[:max_pages]
+
+def process_ai_batch(titles_list, template, client, allowed_years_str="2025, 2026"):
+    prompt = template.replace("{allowed_years}", allowed_years_str)
+    prompt = prompt.replace("{batch_input}", "\n".join([f"{i+1}. {title}" for i, title in enumerate(titles_list)]))
     try:
         response = client.models.generate_content(
             model='gemini-3.1-flash-lite',
@@ -151,23 +179,16 @@ def process_ai_batch(titles_list, template, client):
             )
         )
         
-        # --- 強化版 JSON 解析防線 ---
         raw_text = response.text.strip()
         start_idx = raw_text.find('[')
         end_idx = raw_text.rfind(']')
         
         if start_idx != -1 and end_idx != -1:
-            # 強制只切出 [ 到 ] 之間的內容
             clean_json_str = raw_text[start_idx:end_idx + 1]
             return json.loads(clean_json_str)
         else:
-            # 如果連括號都找不到，就硬著頭皮解析看看，失敗會直接跳到 except
             return json.loads(raw_text)
             
     except Exception as e:
         print(f"AI 批次解析錯誤: {e}")
-        # 關鍵除錯神器：印出 AI 到底回了什麼鬼東西
-        if 'response' in locals() and hasattr(response, 'text'):
-            print(f"【AI 原始回覆內容】:\n{response.text}")
-            
-        return [{"keywords": ["解析失敗"]} for _ in titles_list]
+        return [{"is_valid": False, "keywords": ["解析失敗"]} for _ in titles_list]
