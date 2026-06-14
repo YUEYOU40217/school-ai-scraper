@@ -37,13 +37,20 @@ def main():
 
     print("開始執行爬蟲任務。")
 
+    # 🛠️ 【修改點 1】新增一個字典，用來完整備份歷史 json 中的各校公告資料
+    history_site_backup = {} 
     existing_uuid_map = {}
     history_file = "announcements.json"
+    
     if os.path.exists(history_file):
         try:
             with open(history_file, "r", encoding="utf-8") as f:
                 history_data = json.load(f)
                 for site_info in history_data:
+                    # 以網站網址當 Key，把整包舊資料暫存起來
+                    if "source_link" in site_info:
+                        history_site_backup[site_info["source_link"]] = site_info
+                        
                     for item in site_info.get("data", []):
                         if "link" in item and "uuid" in item:
                             existing_uuid_map[item["link"]] = item["uuid"]
@@ -68,7 +75,7 @@ def main():
         source_name, all_links = utils.fetch_links_smart(target_url)
         
         if not all_links:
-            print(f"警告：{site_name} 未能偵測到任何公告，跳過。")
+            print(f"警告：{site_name} 未能偵測到任何公告，跳過本次抓取。")
             continue
 
         valid_items = []
@@ -104,7 +111,7 @@ def main():
                 
                 all_extracted_records.append({
                     "source_name": source_name,
-                    "source_link": target_url,
+                    "source_link": target_url, # 確保這裡使用 target_url 一致性
                     "title": item['title'],
                     "link": full_url,
                     "keywords": keywords,
@@ -138,6 +145,16 @@ def main():
             "link": target_link,
             "keywords": rec['keywords']
         })
+
+    # 🛠️ 【修改點 2】全新安全防線：比對設定檔，如果某間學校本次抓取失敗（沒出現在 site_data_map 中），就從歷史備份還原
+    for site in config.get("sites", []):
+        target_url = site['url']
+        if target_url not in site_data_map:
+            if target_url in history_site_backup:
+                print(f"🛡️  [安全機制啟動] 偵測到 {site['name']} 本次連線或抓取失敗。已成功從歷史紀錄中還原舊有公告，防止檔案被清空！")
+                site_data_map[target_url] = history_site_backup[target_url]
+            else:
+                print(f"ℹ️  {site['name']} 本次無新資料且歷史無紀錄，略過。")
 
     final_output = []
     
