@@ -28,6 +28,7 @@ jobs:
         run: |
           git fetch origin gh-pages || true
           git show origin/gh-pages:announcements.json > announcements.json || true
+          git show origin/gh-pages:raw_scraped.json > raw_scraped.json || true
 
       - name: Run python script
         env:
@@ -40,14 +41,19 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
+          # 將最終產出與原始抓取紀錄備份至暫存區
           cp announcements.json /tmp/announcements.json
+          cp raw_scraped.json /tmp/raw_scraped.json || true
           
           git checkout -- announcements.json || true
+          git checkout -- raw_scraped.json || true
           
           git fetch origin gh-pages
           git checkout gh-pages
           
+          # 從暫存區復原並備份至 gh-pages 分支
           cp /tmp/announcements.json announcements.json
+          cp /tmp/raw_scraped.json raw_scraped.json || true
           
-          git add announcements.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update: sync data to gh-pages" && git push origin gh-pages)
+          git add announcements.json raw_scraped.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update: sync data and raw logs to gh-pages" && git push origin gh-pages)
