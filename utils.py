@@ -26,67 +26,67 @@ def get_robust_session():
 
 session = get_robust_session()
 
-def fetch_raw_html(target_url):
-    """擁有三重突破保險的底層 HTML 抓取器"""
+def fetch_links_smart(target_url):
+    """【單頁全抓版】破防連線並撈取網頁中所有帶有日期的公告連結"""
     resp_text = None
     scraper_api_key = os.environ.get("SCRAPER_API_KEY")
     
     if scraper_api_key:
-        proxy_url = "https://api.scraperapi.com/"
+        print(f"[跳板模式] 正在透過 Scraper API 連線: {target_url}")
+        proxy_url = "[https://api.scraperapi.com/](https://api.scraperapi.com/)"
         payload = {'api_key': scraper_api_key, 'url': target_url}
         try:
             resp = requests.get(proxy_url, params=payload, timeout=30)
             if resp.status_code == 200:
                 resp.encoding = resp.apparent_encoding
-                return resp.text
+                resp_text = resp.text
         except Exception:
             pass
 
-    try:
-        resp = session.get(target_url, timeout=15, verify=False)
-        resp.encoding = resp.apparent_encoding
-        return resp.text
-    except Exception:
+    if not resp_text:
         try:
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-            resp = requests.get(target_url, headers=headers, timeout=15, verify=False)
+            resp = session.get(target_url, timeout=15, verify=False)
             resp.encoding = resp.apparent_encoding
-            return resp.text
-        except Exception:
+            resp_text = resp.text
+        except Exception as e:
+            print(f" [第一彈連線失敗] 原因: {e}，切換獨立模式...")
             try:
-                context = ssl._create_unverified_context()
-                req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
-                with urllib.request.urlopen(req, context=context, timeout=15) as response:
-                    raw_data = response.read()
-                    try:
-                        return raw_data.decode('utf-8')
-                    except UnicodeDecodeError:
-                        return raw_data.decode('big5', errors='ignore')
-            except Exception:
-                return None
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+                resp = requests.get(target_url, headers=headers, timeout=15, verify=False)
+                resp.encoding = resp.apparent_encoding
+                resp_text = resp.text
+            except Exception as e2:
+                print(f"[第二彈連線失敗] 原因: {e2}，切換終極 urllib...")
+                try:
+                    context = ssl._create_unverified_context()
+                    req = urllib.request.Request(
+                        target_url, 
+                        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+                    )
+                    with urllib.request.urlopen(req, context=context, timeout=15) as response:
+                        raw_data = response.read()
+                        try:
+                            resp_text = raw_data.decode('utf-8')
+                        except UnicodeDecodeError:
+                            resp_text = raw_data.decode('big5', errors='ignore')
+                    print("[終極第三彈] 成功強行突破限制！")
+                except Exception as e3:
+                    print(f"[三重保險皆失敗] 無法連線: {e3}")
+                    return "抓取失敗", []
 
-def clean_soup_garbage(soup):
-    """【黑科技】直接拔掉網頁的導航、頁尾、廣告與樣式，只留核心公告區"""
-    for element in soup(["script", "style", "nav", "footer", "header", "aside"]):
-        element.extract()
-    return soup
-
-def fetch_links_smart(target_url):
-    """【完全體盲猜版】自動尋找網頁中帶有日期的公告連結，並回傳原始碼與解析清單"""
-    html_text = fetch_raw_html(target_url)
-    if not html_text:
-        return "抓取失敗", [], None
-        
     try:
-        soup = BeautifulSoup(html_text, "html.parser")
+        soup = BeautifulSoup(resp_text, "html.parser")
         source_name = soup.title.get_text(strip=True) if soup.title else "未命名網頁"
-        soup = clean_soup_garbage(soup)
         
+        # 移除沒用的網頁元件雜訊
+        for el in soup(["script", "style", "nav", "footer", "header"]):
+            el.extract()
+            
         links = []
         seen_urls = set()
         all_a_tags = soup.find_all('a')
         
-        garbage_words = ["跳到", "主要內容", "previous", "next", "首頁", "返回", "coreui", "登入", "隱私權"]
+        garbage_words = ["跳到", "主要內容", "previous", "next", "首頁", "返回", "coreui", "登入"]
         
         for a_tag in all_a_tags:
             href = a_tag.get('href')
@@ -106,6 +106,7 @@ def fetch_links_smart(target_url):
             row_text = ""
             date_str = "0000-00-00"
             
+            # 向上查找 3 層找日期
             for _ in range(3):
                 if parent:
                     row_text = parent.get_text(separator=' ', strip=True)
@@ -126,48 +127,12 @@ def fetch_links_smart(target_url):
             })
             seen_urls.add(full_url)
                     
-        return source_name, links, soup
+        return source_name, links
     except Exception as e:
-        print(f"抓取清單解析失敗: {e}")
-        return "抓取失敗", [], None
+        print(f"解析失敗: {e}")
+        return "抓取失敗", []
 
-def find_next_page_urls(soup, current_url, max_pages=3):
-    """【AI級盲猜換頁】自動從網頁的頁碼按鈕中通靈出前 N 頁的完整網址"""
-    discovered_urls = [current_url]
-    if not soup or max_pages <= 1:
-        return discovered_urls
-        
-    all_a_tags = soup.find_all('a')
-    page_patterns = [
-        r'page=\d+', r'p=\d+', r'-\d+\.php', r'index_\d+'
-    ]
-    
-    # 尋找看起來像分頁的連結
-    for a_tag in all_a_tags:
-        href = a_tag.get('href', '')
-        text = a_tag.get_text(strip=True)
-        
-        if not href or href.startswith('#') or href.startswith('javascript:'):
-            continue
-            
-        full_url = urljoin(current_url, href)
-        if full_url in discovered_urls:
-            continue
-            
-        # 策略 1：如果文字本身就是數字 (例如 2, 3, 4) 且網址符合分頁特徵
-        if text.isdigit() and int(text) <= max_pages:
-            if any(re.search(pat, href.lower()) for pat in page_patterns):
-                discovered_urls.append(full_url)
-                
-        # 策略 2：如果文字寫著 "下一頁" 或 "Next"
-        elif any(w in text.lower() for w in ["下一頁", "next", "後一頁"]):
-            discovered_urls.append(full_url)
-
-    # 去重並依網址特徵做排序，確保順序大致符合 1 -> 2 -> 3
-    unique_urls = list(dict.fromkeys(discovered_urls))
-    return unique_urls[:max_pages]
-
-def process_ai_batch(titles_list, template, client, allowed_years_str="2025, 2026"):
+def process_ai_batch(titles_list, template, client, allowed_years_str):
     prompt = template.replace("{allowed_years}", allowed_years_str)
     prompt = prompt.replace("{batch_input}", "\n".join([f"{i+1}. {title}" for i, title in enumerate(titles_list)]))
     try:
