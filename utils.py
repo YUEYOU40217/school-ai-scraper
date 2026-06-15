@@ -86,59 +86,109 @@ def fetch_links_smart(target_url):
                     print("[終極第三彈] 成功強行突破高科大 SSL 限制！")
                 except Exception as e3:
                     print(f"[三重保險皆失敗] 該網址真的無法連線: {e3}")
-                    return "抓取失敗", []
 
-    try:
-        soup = BeautifulSoup(resp_text, "html.parser")
-        source_name = soup.title.get_text(strip=True) if soup.title else "未命名網頁"
-        links = []
-        seen_urls = set()
-        all_a_tags = soup.find_all('a')
-        
-        garbage_words = ["跳到", "主要內容", "previous", "next", "首頁", "返回", "coreui"]
-        
-        for a_tag in all_a_tags:
-            href = a_tag.get('href')
-            title = a_tag.get_text(strip=True)
+    # 引入狀態旗標，確保動態核心頂多執行一次，避免無窮迴圈
+    drission_used = False
+    
+    while True:
+        try:
+            soup = BeautifulSoup(resp_text if resp_text else "", "html.parser")
+            source_name = soup.title.get_text(strip=True) if soup.title else "未命名網頁"
+            links = []
+            seen_urls = set()
+            all_a_tags = soup.find_all('a')
             
-            if not href or not title or len(title) < 5: 
-                continue
-                
-            if href.startswith('#') or any(w in title.lower() for w in garbage_words):
-                continue
-                
-            full_url = urljoin(target_url, href)
-            if full_url in seen_urls: 
-                continue
-                
-            parent = a_tag.parent
-            row_text = ""
-            date_str = "0000-00-00"
+            garbage_words = ["跳到", "主要內容", "previous", "next", "首頁", "返回", "coreui"]
             
-            for _ in range(3):
-                if parent:
-                    row_text = parent.get_text(separator=' ', strip=True)
-                    date_match = re.search(r'(\d{2,4}[-/]\d{1,2}[-/]\d{1,2})', row_text)
-                    if date_match:
-                        date_str = date_match.group(1)
-                        break
-                    parent = parent.parent
-            
-            if date_str == "0000-00-00":
-                continue
+            for a_tag in all_a_tags:
+                href = a_tag.get('href')
+                title = a_tag.get_text(strip=True)
                 
-            links.append({
-                "title": title, 
-                "href": href, 
-                "row_text": row_text,
-                "date": date_str
-            })
-            seen_urls.add(full_url)
+                if not href or not title or len(title) < 5: 
+                    continue
                     
-        return source_name, links
-    except Exception as e:
-        print(f"抓取清單解析失敗: {e}")
-        return "抓取失敗", []
+                if href.startswith('#') or any(w in title.lower() for w in garbage_words):
+                    continue
+                    
+                full_url = urljoin(target_url, href)
+                if full_url in seen_urls: 
+                    continue
+                    
+                parent = a_tag.parent
+                row_text = ""
+                date_str = "0000-00-00"
+                
+                for _ in range(3):
+                    if parent:
+                        row_text = parent.get_text(separator=' ', strip=True)
+                        date_match = re.search(r'(\d{2,4}[-/]\d{1,2}[-/]\d{1,2})', row_text)
+                        if date_match:
+                            date_str = date_match.group(1)
+                            break
+                        parent = parent.parent
+                
+                if date_str == "0000-00-00":
+                    continue
+                    
+                links.append({
+                    "title": title, 
+                    "href": href, 
+                    "row_text": row_text,
+                    "date": date_str
+                })
+                seen_urls.add(full_url)
+            
+            # 【終極第四彈：DrissionPage 動態補救防線】
+            # 如果前面方法抓下來的 html 沒解析出任何帶日期的公告，代表遇到了像正修科大這類的 JavaScript 動態渲染網頁
+            if not links and not drission_used:
+                print("[靜態防線未取得有效內容] 偵測到公告項目為空，可能是動態網頁，啟動第四彈：DrissionPage 自動化瀏覽器核心強行突破...")
+                try:
+                    from DrissionPage import ChromiumPage, ChromiumOptions
+                    co = ChromiumOptions().auto_port()
+                    co.headless(True)  # 背景執行，不彈出視窗
+                    
+                    page = ChromiumPage(co)
+                    page.get(target_url)
+                    
+                    # 智慧等待 a 標籤載入，並多給予 2 秒讓動態 JS 把公告完全吐出來
+                    page.wait.ele_loaded('tag:a', timeout=10)
+                    page.wait(2) 
+                    
+                    resp_text = page.html  # 將完整渲染後的 DOM 丟回給 resp_text
+                    drission_used = True   # 標記已使用過
+                    page.quit()
+                    
+                    print("[第四彈] DrissionPage 成功取得渲染後的完整網頁原始碼，重新進入解析流程。")
+                    continue               # 回到迴圈起點，用你原本的 BS4 邏輯重新解析完整網頁
+                except Exception as ed:
+                    print(f"[第四彈 DrissionPage 異常] 錯誤原因: {ed}")
+                    if 'page' in locals():
+                        page.quit()
+                        
+            return source_name, links
+            
+        except Exception as e:
+            print(f"抓取清單解析失敗: {e}")
+            # 解析發生嚴重異常時的備用補救措施
+            if not drission_used:
+                print("[解析異常補救] 嘗試啟動第四彈：DrissionPage 自動化瀏覽器...")
+                try:
+                    from DrissionPage import ChromiumPage, ChromiumOptions
+                    co = ChromiumOptions().auto_port()
+                    co.headless(True)
+                    page = ChromiumPage(co)
+                    page.get(target_url)
+                    page.wait.ele_loaded('tag:a', timeout=10)
+                    page.wait(2)
+                    resp_text = page.html
+                    drission_used = True
+                    page.quit()
+                    continue
+                except Exception as ed:
+                    print(f"[第四彈 DrissionPage 補救異常] 錯誤原因: {ed}")
+                    if 'page' in locals():
+                        page.quit()
+            return "抓取失敗", []
 
 def process_ai_batch(titles_list, template, client):
     prompt = template.replace("{batch_input}", "\n".join([f"{i+1}. {title}" for i, title in enumerate(titles_list)]))
