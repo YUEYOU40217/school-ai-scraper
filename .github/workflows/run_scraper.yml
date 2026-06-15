@@ -40,20 +40,18 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # 將兩個 JSON 都先複製到暫存區
-          cp announcements.json /tmp/announcements.json
+          # 1. 先把產出的新資料安全地備份到 /tmp
+          cp announcements.json /tmp/announcements.json || true
           cp raw_crawled_data.json /tmp/raw_crawled_data.json || true
           
-          # 放棄目前分支的變更，準備切換
-          git checkout -- announcements.json raw_crawled_data.json || true
-          
+          # 2. 強制切換分支：使用 -f (force) 暴力無視並覆蓋目前的工作區變更
           git fetch origin gh-pages
-          git checkout gh-pages
+          git checkout -f gh-pages
           
-          # 從暫存區放回 gh-pages 分支
-          cp /tmp/announcements.json announcements.json
+          # 3. 把剛剛備份的新資料放回 gh-pages 分支中
+          cp /tmp/announcements.json announcements.json || true
           cp /tmp/raw_crawled_data.json raw_crawled_data.json || true
           
-          # 同時追蹤並提交這兩個檔案
+          # 4. 檢查是否有變更，有的話就提交並推送到 gh-pages
           git add announcements.json raw_crawled_data.json
           git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update: sync data and raw logs to gh-pages" && git push origin gh-pages)
