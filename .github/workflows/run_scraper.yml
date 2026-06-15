@@ -45,10 +45,10 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # 1. 建立暫存資料夾，把所有產出的 jsonl 與備份檔複製過去
+          # 1. 建立暫存資料夾，把所有產出的 jsonl 與備份檔複製過去 (★ 這裡改成 raw_crawled_*.json)
           mkdir -p /tmp/scraper_data
           cp *.jsonl /tmp/scraper_data/ || true
-          cp raw_crawled_data.json /tmp/scraper_data/ || true
+          cp raw_crawled_*.json /tmp/scraper_data/ || true
           
           # 2. 清除工作區的變更，準備切換分支 (避免未 commit 檔案阻擋 checkout)
           git checkout -- . || true
@@ -56,10 +56,10 @@ jobs:
           # 3. 切換到 gh-pages 分支 (如果沒有這個分支就自動建立一個)
           git checkout gh-pages || git checkout -b gh-pages
           
-          # 4. 把剛剛暫存的新資料蓋過來工作區
+          # 4. 把剛剛暫存的新資料蓋過來工作區 (★ 這裡也改成 raw_crawled_*.json)
           cp /tmp/scraper_data/*.jsonl ./ || true
-          cp /tmp/scraper_data/raw_crawled_data.json ./ || true
+          cp /tmp/scraper_data/raw_crawled_*.json ./ || true
           
-          # 5. 加入追蹤並 Push
-          git add *.jsonl raw_crawled_data.json
+          # 5. 加入追蹤並 Push (★ 這裡同樣改成 raw_crawled_*.json)
+          git add *.jsonl raw_crawled_*.json
           git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update: sync data to gh-pages" && git push origin gh-pages)
