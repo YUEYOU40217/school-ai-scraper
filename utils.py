@@ -1,23 +1,21 @@
-import os
-import re
-import json
-import ssl
-import time  # 新增時間控制，用於重試等待
-import urllib.request
-from urllib.parse import urljoin
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
-import urllib3
+import urllib3  
+import urllib.request
+import ssl             
 from bs4 import BeautifulSoup
 from google import genai
 from google.genai import types
+import json
+import re
+import os
+from urllib.parse import urljoin
 
-# 關閉不安全連線的 SSL 警告
+# 關閉常規警告文字
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def get_robust_session():
-    """建立具備自動重試機制的強固型 Session"""
     session = requests.Session()
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -29,50 +27,66 @@ def get_robust_session():
 
 session = get_robust_session()
 
-def fetch_html_robust(target_url):
-    """強固型網頁原始碼抓取核心（整合 ScraperAPI 與三重後援防線）"""
+def fetch_links_smart(target_url):
+    """【無格式盲猜版】自動尋找網頁中帶有日期的公告連結"""
+    resp_text = None
     scraper_api_key = os.environ.get("SCRAPER_API_KEY")
     
+    # 優先防線：使用 Scraper API 代理連線
     if scraper_api_key:
+        print(f"[跳板模式] 正在透過 Scraper API 連線至: {target_url}")
         proxy_url = "https://api.scraperapi.com/"
-        payload = {'api_key': scraper_api_key, 'url': target_url}
+        payload = {
+            'api_key': scraper_api_key,
+            'url': target_url
+        }
         try:
             resp = requests.get(proxy_url, params=payload, timeout=30)
             if resp.status_code == 200:
                 resp.encoding = resp.apparent_encoding
-                return resp.text
+                resp_text = resp.text
+                print("[跳板模式] 成功取得網頁原始碼。")
+            else:
+                print(f"[跳板模式失敗] 狀態碼: {resp.status_code}，切換回原有機制...")
         except Exception as e:
-            print(f"[跳板模式異常] {target_url} 嘗試切換回原有機制... 錯誤: {e}")
+            print(f"[跳板模式異常] 錯誤原因: {e}，切換回原有機制...")
 
-    try:
-        resp = session.get(target_url, timeout=15, verify=False)
-        resp.encoding = resp.apparent_encoding
-        return resp.text
-    except Exception as e:
-        try:
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-            resp = requests.get(target_url, headers=headers, timeout=15, verify=False)
-            resp.encoding = resp.apparent_encoding
-            return resp.text
-        except Exception as e2:
-            try:
-                context = ssl._create_unverified_context()
-                req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, context=context, timeout=15) as response:
-                    raw_data = response.read()
-                    try:
-                        return raw_data.decode('utf-8')
-                    except UnicodeDecodeError:
-                        return raw_data.decode('big5', errors='ignore')
-            except Exception as e3:
-                print(f"[所有連線管道皆失敗] 無法連線至: {target_url}")
-                return None
-
-def fetch_links_smart(target_url):
-    """【第一層】無差別全量掃描網頁，抓取列表頁上「所有」連結與周邊文字"""
-    resp_text = fetch_html_robust(target_url)
+    # 原有三重保險連線機制（當沒有金鑰或跳板失敗時做為備用防線）
     if not resp_text:
-        return "抓取失敗", []
+        try:
+            # 第一彈：常規 Session 連線
+            resp = session.get(target_url, timeout=15, verify=False)
+            resp.encoding = resp.apparent_encoding
+            resp_text = resp.text
+        except Exception as e:
+            print(f" [第一彈 Session 連線失敗] 錯誤原因: {e}，切換獨立模式...")
+            try:
+                # 第二彈：獨立 requests 連線
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+                resp = requests.get(target_url, headers=headers, timeout=15, verify=False)
+                resp.encoding = resp.apparent_encoding
+                resp_text = resp.text
+            except Exception as e2:
+                print(f"[第二彈 獨立連線也失敗] 錯誤原因: {e2}。")
+                print("[啟動終極第三彈] 使用底層 urllib 建立不驗證 SSL 上下文強行突破...")
+                try:
+                    # 第三彈：使用 Python 最底層的 urllib，並強制建立一個「完全不驗證」的 SSL Context
+                    context = ssl._create_unverified_context()
+                    req = urllib.request.Request(
+                        target_url, 
+                        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+                    )
+                    with urllib.request.urlopen(req, context=context, timeout=15) as response:
+                        raw_data = response.read()
+                        try:
+                            resp_text = raw_data.decode('utf-8')
+                        except UnicodeDecodeError:
+                            resp_text = raw_data.decode('big5', errors='ignore')
+                            
+                    print("[終極第三彈] 成功強行突破高科大 SSL 限制！")
+                except Exception as e3:
+                    print(f"[三重保險皆失敗] 該網址真的無法連線: {e3}")
+                    return "抓取失敗", []
 
     try:
         soup = BeautifulSoup(resp_text, "html.parser")
@@ -81,11 +95,16 @@ def fetch_links_smart(target_url):
         seen_urls = set()
         all_a_tags = soup.find_all('a')
         
+        garbage_words = ["跳到", "主要內容", "previous", "next", "首頁", "返回", "coreui"]
+        
         for a_tag in all_a_tags:
             href = a_tag.get('href')
             title = a_tag.get_text(strip=True)
             
-            if not href or href.startswith('#') or href.startswith('javascript:'):
+            if not href or not title or len(title) < 5: 
+                continue
+                
+            if href.startswith('#') or any(w in title.lower() for w in garbage_words):
                 continue
                 
             full_url = urljoin(target_url, href)
@@ -94,88 +113,61 @@ def fetch_links_smart(target_url):
                 
             parent = a_tag.parent
             row_text = ""
+            date_str = "0000-00-00"
+            
             for _ in range(3):
                 if parent:
                     row_text = parent.get_text(separator=' ', strip=True)
-                    if len(row_text) > len(title):
+                    date_match = re.search(r'(\d{2,4}[-/]\d{1,2}[-/]\d{1,2})', row_text)
+                    if date_match:
+                        date_str = date_match.group(1)
                         break
                     parent = parent.parent
             
-            display_title = title if title else (row_text[:30] if row_text else "未命名連結")
-            
+            if date_str == "0000-00-00":
+                continue
+                
             links.append({
-                "title": display_title, 
-                "href": full_url, 
-                "list_context": row_text if row_text else display_title
+                "title": title, 
+                "href": href, 
+                "row_text": row_text,
+                "date": date_str
             })
             seen_urls.add(full_url)
                     
-        print(f"[全量清單掃描成功] 共撈到 {len(links)} 個連結，即將進行無差別深度抓取。")
         return source_name, links
     except Exception as e:
         print(f"抓取清單解析失敗: {e}")
         return "抓取失敗", []
 
-def fetch_detail_content(url):
-    """【第二層】深入公告內頁，一分不差抓取全部純文字內容"""
-    if any(url.lower().endswith(ext) for ext in ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.odt', '.zip', '.rar']):
-        return f"[此為附件檔案，請參閱連結] {url}"
-
-    html = fetch_html_robust(url)
-    if not html:
-        return "[內頁網頁讀取失敗]"
+def process_ai_batch(titles_list, template, client):
+    prompt = template.replace("{batch_input}", "\n".join([f"{i+1}. {title}" for i, title in enumerate(titles_list)]))
     try:
-        soup = BeautifulSoup(html, "html.parser")
-        
-        for element in soup(["script", "style"]):
-            element.extract()
-        
-        text = soup.get_text(separator=" ", strip=True)
-        text = re.sub(r'\s+', ' ', text)
-        
-        return text if text else "[此網頁無文字內容]"
-    except Exception as e:
-        return f"[內頁文字解析異常]: {e}"
-
-def process_ai_batch(batch_data, template, client):
-    """將包含 uuid 的原始資料轉為 JSON 送交 AI 解析，具備打死不退的重試防禦機制"""
-    batch_input_str = json.dumps(batch_data, ensure_ascii=False)
-    prompt = template.replace("{batch_input}", batch_input_str)
-    
-    max_retries = 5  # 最大重試次數
-    
-    for attempt in range(max_retries):
-        try:
-            # 升級亮點：強制指定 response_mime_type 為 JSON，讓 3.1 Flash-Lite 原生輸出完美結構
-            response = client.models.generate_content(
-                model='gemini-3.1-flash-lite',
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json"
-                )
+        response = client.models.generate_content(
+            model='gemini-3.1-flash-lite',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
             )
+        )
+        
+        # --- 強化版 JSON 解析防線 ---
+        raw_text = response.text.strip()
+        start_idx = raw_text.find('[')
+        end_idx = raw_text.rfind(']')
+        
+        if start_idx != -1 and end_idx != -1:
+            # 強制只切出 [ 到 ] 之間的內容
+            clean_json_str = raw_text[start_idx:end_idx + 1]
+            return json.loads(clean_json_str)
+        else:
+            # 如果連括號都找不到，就硬著頭皮解析看看，失敗會直接跳到 except
+            return json.loads(raw_text)
             
-            ai_text = response.text.strip()
+    except Exception as e:
+        print(f"AI 批次解析錯誤: {e}")
+        # 關鍵除錯神器：印出 AI 到底回了什麼鬼東西
+        if 'response' in locals() and hasattr(response, 'text'):
+            print(f"【AI 原始回覆內容】:\n{response.text}")
             
-            # 安全清理（以防萬一）
-            if ai_text.startswith("```"):
-                ai_text = ai_text.replace("```json", "").replace("```", "")
-            ai_text = ai_text.strip()
-            
-            # 嘗試解析 JSON
-            result_list = json.loads(ai_text)
-            return result_list
-            
-        except Exception as e:
-            print(f"   ⚠️ [AI 處理失敗] 第 {attempt + 1}/{max_retries} 次嘗試失敗。")
-            print(f"      錯誤原因: {e}")
-            
-            if attempt < max_retries - 1:
-                # 遞增等待機制（Exponential Backoff 的變形）：第一次等 20 秒，第二次等 40 秒... 
-                # 這能完美避開 Google 免費版的每分鐘限制（Rate Limit 429）與暫時性塞車（503）
-                sleep_seconds = (attempt + 1) * 20
-                print(f"      [防禦機制啟動] 將在 {sleep_seconds} 秒後「重新嘗試」處理本批資料...")
-                time.sleep(sleep_seconds)
-            else:
-                print("   ❌ [嚴重錯誤] 已達到最大重試次數，本批資料被迫跳過。")
-                return []
+        return [{"keywords": ["解析失敗"]} for _ in titles_list]
