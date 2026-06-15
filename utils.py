@@ -1,3 +1,10 @@
+為了徹底避免這個複製貼上的地雷，我把拔除 Markdown 標記的邏輯改寫成**最安全、不使用正則表達式反引號**的版本。
+
+請將以下這份**修正後的 `utils.py` 完整代碼**重新貼上並覆蓋您的檔案：
+
+### 修正版的 `utils.py`
+
+```python
 import os
 import re
 import json
@@ -33,7 +40,7 @@ def fetch_html_robust(target_url):
     scraper_api_key = os.environ.get("SCRAPER_API_KEY")
     
     if scraper_api_key:
-        proxy_url = "https://api.scraperapi.com/"
+        proxy_url = "[https://api.scraperapi.com/](https://api.scraperapi.com/)"
         payload = {'api_key': scraper_api_key, 'url': target_url}
         try:
             resp = requests.get(proxy_url, params=payload, timeout=30)
@@ -92,7 +99,7 @@ def fetch_links_smart(target_url):
             if full_url in seen_urls: 
                 continue
                 
-            # 抓取該連結「上下三層父節點」內的所有文字（一分不差地保留畫面上周邊文字）
+            # 抓取該連結「上下三層父節點」內的所有文字
             parent = a_tag.parent
             row_text = ""
             for _ in range(3):
@@ -128,7 +135,6 @@ def fetch_detail_content(url):
     try:
         soup = BeautifulSoup(html, "html.parser")
         
-        # 僅拔除絕對不會有公告內容的背後腳本與樣式，保留所有文字
         for element in soup(["script", "style"]):
             element.extract()
         
@@ -140,15 +146,11 @@ def fetch_detail_content(url):
         return f"[內頁文字解析異常]: {e}"
 
 def process_ai_batch(batch_data, template, client):
-    """將包含 uuid 的原始資料轉為 JSON 送交 AI 解析，並具備 Markdown 防禦清理"""
-    # 將包含 uuid 等完整資訊的批次陣列，轉為 JSON 字串
+    """將包含 uuid 的原始資料轉為 JSON 送交 AI 解析，並具備最安全的 Markdown 防禦清理"""
     batch_input_str = json.dumps(batch_data, ensure_ascii=False)
-    
-    # 注入提示詞範本
     prompt = template.replace("{batch_input}", batch_input_str)
     
     try:
-        # 呼叫新版 Google GenAI SDK (建議使用 2.5-flash 以確保 JSON 格式穩定度)
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt
@@ -156,6 +158,19 @@ def process_ai_batch(batch_data, template, client):
         
         ai_text = response.text.strip()
         
-        # 防禦機制：移除 AI 可能擅自加上的 Markdown 區塊標記
+        # 安全防禦機制：用最簡單的 replace 替換掉可能破壞 JSON 解析的 Markdown 區塊
         if ai_text.startswith("```"):
-            ai_text = re.sub(r'^
+            ai_text = ai_text.replace("```json", "")
+            ai_text = ai_text.replace("```", "")
+            
+        ai_text = ai_text.strip()
+        
+        result_list = json.loads(ai_text)
+        return result_list
+        
+    except json.JSONDecodeError as je:
+        print(f"AI 回傳資料解析 JSON 失敗: {je}")
+        return []
+    except Exception as e:
+        print(f"AI 批次解析發生錯誤: {e}")
+        return []
