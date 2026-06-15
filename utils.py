@@ -69,7 +69,7 @@ def fetch_html_robust(target_url):
                 return None
 
 def fetch_links_smart(target_url):
-    """【第一層】無差別全量掃描網頁，抓取列表頁上「所有」連結與周邊文字（零過濾）"""
+    """【第一層】無差別全量掃描網頁，抓取列表頁上「所有」連結與周邊文字"""
     resp_text = fetch_html_robust(target_url)
     if not resp_text:
         return "抓取失敗", []
@@ -85,16 +85,15 @@ def fetch_links_smart(target_url):
             href = a_tag.get('href')
             title = a_tag.get_text(strip=True)
             
-            # 只排除真正沒寫網址、或點擊無效的空標籤
+            # 排除無效點擊
             if not href or href.startswith('#') or href.startswith('javascript:'):
                 continue
                 
-            # 補全相對路徑網址
             full_url = urljoin(target_url, href)
             if full_url in seen_urls: 
                 continue
                 
-            # 抓取該連結「上下三層父節點」內的所有文字（一分不差地保留它在畫面上周邊的所有文字）
+            # 抓取連結上下三層父節點的文字（一分不差保留畫面上周邊文字）
             parent = a_tag.parent
             row_text = ""
             for _ in range(3):
@@ -104,7 +103,6 @@ def fetch_links_smart(target_url):
                         break
                     parent = parent.parent
             
-            # 哪怕標題是空的，只要有周邊文字，我們就留著，絕不自作聰明幫你刪除
             display_title = title if title else (row_text[:30] if row_text else "未命名連結")
             
             links.append({
@@ -121,8 +119,7 @@ def fetch_links_smart(target_url):
         return "抓取失敗", []
 
 def fetch_detail_content(url):
-    """【第二層】深入公告內頁，一分不差地抓取全部純文字內容"""
-    # 如果是常見的附件檔案（如 PDF, DOCX 等），直接回傳檔案網址，不強行當作網頁解析
+    """【第二層】深入公告內頁，一分不差抓取全部純文字內容"""
     if any(url.lower().endswith(ext) for ext in ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.odt', '.zip', '.rar']):
         return f"[此為附件檔案，請參閱連結] {url}"
 
@@ -132,11 +129,10 @@ def fetch_detail_content(url):
     try:
         soup = BeautifulSoup(html, "html.parser")
         
-        # 只拔除絕對不會有公告內容的背後腳本與樣式，其餘（含 header/footer）完全保留，保證一分不差
+        # 只拔除腳本與樣式，其餘完全保留
         for element in soup(["script", "style"]):
             element.extract()
         
-        # 取得內頁「完整純文字」並壓縮連續空白符號
         text = soup.get_text(separator=" ", strip=True)
         text = re.sub(r'\s+', ' ', text)
         
@@ -145,17 +141,18 @@ def fetch_detail_content(url):
         return f"[內頁文字解析異常]: {e}"
 
 def process_ai_batch(batch_data, template, client):
-    """將含有「標題 + 列表周邊上下文 + 內頁完整內文」的資料組合，批次送交 Gemini 解析"""
+    """將含有「標題+上下文+內頁內文」的資料組合送交 Gemini 解析"""
     batch_inputs = []
     for i, item in enumerate(batch_data):
         title = item['title']
+        url = item['url']
         list_context = item.get('list_context', '無週邊文字')
         full_content = item.get('content', '無內文資料')
         
-        # 組裝毫無遺漏的資訊餵給 AI
         batch_inputs.append(
             f"項目 {i+1}:\n"
             f"  - 標題: {title}\n"
+            f"  - 網址: {url}\n"
             f"  - 列表頁週邊文字: {list_context}\n"
             f"  - 內頁完整內文: {full_content}\n"
             f"----------------------------------------"
@@ -183,7 +180,4 @@ def process_ai_batch(batch_data, template, client):
             
     except Exception as e:
         print(f"AI 批次解析錯誤: {e}")
-        if 'response' in locals() and hasattr(response, 'text'):
-            print(f"【AI 原始回覆內容】:\n{response.text}")
-            
-        return [{"keywords": ["解析失敗"]} for _ in batch_data]
+        return []
