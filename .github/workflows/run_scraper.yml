@@ -1,53 +1,52 @@
-name: Run Scraper
+name: 🏫 大專院校公告自動爬蟲與更新
 
 on:
+  # 設定自動執行的排程 (目前設定為台灣時間每天凌晨 2:00 執行)
+  # 註：Cron 時間為 UTC，所以 18:00 UTC = 02:00 台灣時間 (UTC+8)
   schedule:
-    - cron: '18 2,6,10,14,18,22 * * *'
+    - cron: '0 * * * *'
+  
+  # 允許你在 GitHub 網頁上手動點擊 "Run workflow" 按鈕執行
   workflow_dispatch:
 
 jobs:
-  run-scraper:
+  scrape-and-update:
     runs-on: ubuntu-latest
+    
+    # 給予 GitHub Actions 寫入 Repo 的權限，這樣它才能把爬到的資料 Push 回來
+    permissions:
+      contents: write
+
     steps:
-      - name: Checkout main branch
+      - name: 📥 檢出程式碼 (Checkout Repo)
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: 🐍 設定 Python 環境
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: '**/requirements.txt'
-
-      - name: Install dependencies
+          python-version: '3.10'
+          
+      - name: 📦 安裝相依套件 (Install Dependencies)
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install requests beautifulsoup4 google-genai
 
-      - name: Fetch old data from gh-pages
-        run: |
-          git fetch origin gh-pages || true
-          git show origin/gh-pages:announcements.json > announcements.json || true
-
-      - name: Run python script
+      - name: 🚀 執行爬蟲主程式 (Run Scraper)
+        # 這裡會讀取你在 GitHub Secrets 設定的 API 金鑰
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
-        run: python scraper.py
-
-      - name: Commit and Push to gh-pages
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          python scraper.py
+
+      - name: 💾 自動提交並推送到 GitHub (Commit and Push)
+        run: |
+          # 設定 Git 使用者資訊 (由 GitHub Actions 機器人代勞)
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          cp announcements.json /tmp/announcements.json
+          # 將所有產生的 .jsonl 以及備份的 raw_crawled_data.json 加入追蹤
+          git add *.jsonl raw_crawled_data.json
           
-          git checkout -- announcements.json || true
-          
-          git fetch origin gh-pages
-          git checkout gh-pages
-          
-          cp /tmp/announcements.json announcements.json
-          
-          git add announcements.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update: sync data to gh-pages" && git push origin gh-pages)
+          # 如果有檔案變更，就進行 Commit 和 Push
+          # git diff --staged --quiet 會檢查是否有新資料，避免沒有更新時報錯
+          git diff --staged --quiet || (git commit -m "🤖 自動更新：抓取最新學校公告資料" && git push)
