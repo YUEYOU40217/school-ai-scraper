@@ -37,7 +37,6 @@ def main():
 
     print("開始執行爬蟲任務。")
 
-    # 🛠️ 【修改點 1】新增一個字典，用來完整備份歷史 json 中的各校公告資料
     history_site_backup = {} 
     existing_uuid_map = {}
     history_file = "announcements.json"
@@ -47,7 +46,6 @@ def main():
             with open(history_file, "r", encoding="utf-8") as f:
                 history_data = json.load(f)
                 for site_info in history_data:
-                    # 以網站網址當 Key，把整包舊資料暫存起來
                     if "source_link" in site_info:
                         history_site_backup[site_info["source_link"]] = site_info
                         
@@ -67,11 +65,16 @@ def main():
     client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
     all_extracted_records = []
 
+    # ==========================================
+    # 🛠️ 【階段一】純爬蟲階段：先爬取所有網站並儲存原始資料
+    # ==========================================
+    crawled_raw_data = {}
+
     for site in config.get("sites", []):
         target_url = site['url']
         site_name = site['name']
         
-        print(f"啟動網站處理: {site_name}")
+        print(f"啟動網站爬取: {site_name}")
         source_name, all_links = utils.fetch_links_smart(target_url)
         
         if not all_links:
@@ -93,8 +96,36 @@ def main():
             
             out_of_range_count = 0
             valid_items.append(item)
+        
+        # 將該網站爬到的合格資料暫存起來
+        crawled_raw_data[target_url] = {
+            "site_name": site_name,
+            "source_name": source_name,
+            "valid_items": valid_items
+        }
 
-        print(f"[{site_name}] 合格公告共 {len(valid_items)} 筆，開始進行每 {BATCH_SIZE} 筆分批打包解析。")
+    # 💾 在呼叫 AI 之前，先把爬到的所有原始資料存成獨立的 JSON 檔案
+    raw_output_file = "raw_crawled_data.json"
+    with open(raw_output_file, "w", encoding="utf-8") as f:
+        json.dump(crawled_raw_data, f, ensure_ascii=False, indent=2)
+    print(f"🎉 已成功將所有原始爬取資料寫入 {raw_output_file}，準備進入 AI 解析階段。")
+
+    # ==========================================
+    # 🛠️ 【階段二】AI 解析階段：從暫存資料中讀取並批次送給 AI
+    # ==========================================
+    for site in config.get("sites", []):
+        target_url = site['url']
+        site_name = site['name']
+        
+        # 如果這個網站爬取失敗或被跳過，就不進行 AI 解析
+        if target_url not in crawled_raw_data:
+            continue
+            
+        site_info = crawled_raw_data[target_url]
+        source_name = site_info["source_name"]
+        valid_items = site_info["valid_items"]
+
+        print(f"[{site_name}] 開始進行每 {BATCH_SIZE} 筆分批打包解析 (共 {len(valid_items)} 筆)。")
         
         for i in range(0, len(valid_items), BATCH_SIZE):
             batch = valid_items[i : i + BATCH_SIZE]
@@ -111,7 +142,7 @@ def main():
                 
                 all_extracted_records.append({
                     "source_name": source_name,
-                    "source_link": target_url, # 確保這裡使用 target_url 一致性
+                    "source_link": target_url,
                     "title": item['title'],
                     "link": full_url,
                     "keywords": keywords,
@@ -119,10 +150,12 @@ def main():
                     "parsed_datetime": clean_and_parse_date(item['date'])
                 })
 
+    # ==========================================
+    # 後續的資料整理與寫入最終檔案 (保持原樣)
+    # ==========================================
     all_extracted_records.sort(key=lambda x: x['parsed_datetime'], reverse=True)
 
     site_data_map = {}
-    
     for rec in all_extracted_records:
         src_url = rec['source_link']
         if src_url not in site_data_map:
@@ -146,7 +179,6 @@ def main():
             "keywords": rec['keywords']
         })
 
-    # 🛠️ 【修改點 2】全新安全防線：比對設定檔，如果某間學校本次抓取失敗（沒出現在 site_data_map 中），就從歷史備份還原
     for site in config.get("sites", []):
         target_url = site['url']
         if target_url not in site_data_map:
@@ -157,7 +189,6 @@ def main():
                 print(f"ℹ️  {site['name']} 本次無新資料且歷史無紀錄，略過。")
 
     final_output = []
-    
     for site_info in site_data_map.values():
         final_output.append({
             "source_name": site_info["source_name"],
