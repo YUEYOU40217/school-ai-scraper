@@ -1,10 +1,3 @@
-為了徹底避免這個複製貼上的地雷，我把拔除 Markdown 標記的邏輯改寫成**最安全、不使用正則表達式反引號**的版本。
-
-請將以下這份**修正後的 `utils.py` 完整代碼**重新貼上並覆蓋您的檔案：
-
-### 修正版的 `utils.py`
-
-```python
 import os
 import re
 import json
@@ -40,7 +33,7 @@ def fetch_html_robust(target_url):
     scraper_api_key = os.environ.get("SCRAPER_API_KEY")
     
     if scraper_api_key:
-        proxy_url = "[https://api.scraperapi.com/](https://api.scraperapi.com/)"
+        proxy_url = "https://api.scraperapi.com/"
         payload = {'api_key': scraper_api_key, 'url': target_url}
         try:
             resp = requests.get(proxy_url, params=payload, timeout=30)
