@@ -1,180 +1,102 @@
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util import Retry
-import urllib3  
-import urllib.request
-import ssl             
-from bs4 import BeautifulSoup
-from google import genai
-from google.genai import types
-import json
-import re
 import os
-from urllib.parse import urljoin
+import json
+from google import genai
+from utils import fetch_links_smart, fetch_detail_content, process_ai_batch
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# 這是特別為台灣大專院校設計的 AI 提示詞範本
+AI_TEMPLATE = """你現在是台灣大專院校的公告解析與資料清理專家。
+我會提供一批從學校網頁爬取下來的「可能包含雜訊」的資料。
+每筆資料包含「標題」、「網址」、「列表頁週邊文字」與「內頁完整內文」。
 
-def get_robust_session():
-    session = requests.Session()
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    })
-    retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
-    session.mount('http://', HTTPAdapter(max_retries=retries))
-    session.mount('https://', HTTPAdapter(max_retries=retries))
-    return session
+請依照以下嚴格規則處理，並輸出 JSON 陣列格式：
+1. 過濾雜訊：如果從標題或內文判斷這只是「常駐導覽連結」(如：回到首頁、聯絡我們、網頁版權聲明、隱私權政策) 或「無效頁面」，請直接捨棄該筆資料，不要放進結果中。
+2. 提取與轉換日期：從「列表頁週邊文字」或「內頁完整內文」中找出公告實際發布日期。
+   - 務必看懂台灣特殊格式：如 115.06.15 或 115/06/15 需轉換為西元 2026-06-15 (民國年+1911)。
+   - 若出現學期制如 114-2，請結合上下文推算，或取該學期的大約開始月份。
+   - 統一輸出標準格式：YYYY-MM-DD。若真的找不到日期，請填 "未知"。
+3. 提取處室：判斷發布單位（例如：教務處、學務處）。若無則填 "未知"。
+4. 摘要：產生約 30-50 字的內容摘要。
+5. 網址：請保留該項目提供的原始網址 (link)。
 
-session = get_robust_session()
+回傳的 JSON 陣列格式範例：
+[
+  {
+    "title": "114學年度第2學期選課注意事項",
+    "date": "2026-05-20",
+    "department": "教務處",
+    "summary": "說明114-2學期初選與加退選的時程規劃與選課系統操作注意事項...",
+    "link": "https://..."
+  }
+]
 
-def fetch_html_robust(target_url):
-    """強固型網頁原始碼抓取核心（整合 ScraperAPI 與三重保險機制）"""
-    scraper_api_key = os.environ.get("SCRAPER_API_KEY")
+以下是這批需處理的資料：
+{batch_input}
+
+請務必只回傳合法的 JSON 陣列字串，不需要 Markdown 標記或其他說明。"""
+
+
+def main():
+    api_key = os.environ.get("GEMINI_API_KEY")
+    target_url = os.environ.get("TARGET_URL")
     
-    if scraper_api_key:
-        proxy_url = "https://api.scraperapi.com/"
-        payload = {'api_key': scraper_api_key, 'url': target_url}
-        try:
-            resp = requests.get(proxy_url, params=payload, timeout=30)
-            if resp.status_code == 200:
-                resp.encoding = resp.apparent_encoding
-                return resp.text
-        except Exception as e:
-            print(f"[跳板模式異常] {target_url} 嘗試切換回原有機制... 錯誤: {e}")
+    if not api_key:
+        print("[錯誤] 找不到 GEMINI_API_KEY 環境變數。")
+        return
+    if not target_url:
+        print("[錯誤] 找不到 TARGET_URL 環境變數。")
+        return
 
-    # 三重保險備用防線
-    try:
-        resp = session.get(target_url, timeout=15, verify=False)
-        resp.encoding = resp.apparent_encoding
-        return resp.text
-    except Exception as e:
-        try:
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-            resp = requests.get(target_url, headers=headers, timeout=15, verify=False)
-            resp.encoding = resp.apparent_encoding
-            return resp.text
-        except Exception as e2:
-            try:
-                context = ssl._create_unverified_context()
-                req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, context=context, timeout=15) as response:
-                    raw_data = response.read()
-                    try:
-                        return raw_data.decode('utf-8')
-                    except UnicodeDecodeError:
-                        return raw_data.decode('big5', errors='ignore')
-            except Exception as e3:
-                print(f"[所有連線管道皆失敗] 無法連線至: {target_url}")
-                return None
+    client = genai.Client(api_key=api_key)
+    print(f"[開始執行] 目標網址: {target_url}")
+    
+    # 【階段一：全量爬取原始資料】
+    source_name, raw_links = fetch_links_smart(target_url)
+    if not raw_links:
+        print("[異常中斷] 列表頁未撈到任何連結。")
+        return
 
-def fetch_links_smart(target_url):
-    """【第一層】自動尋找網頁中帶有日期的公告連結"""
-    resp_text = fetch_html_robust(target_url)
-    if not resp_text:
-        return "抓取失敗", []
+    print(f"[深度抓取] 開始深入 {len(raw_links)} 個內頁抓取完整文字...")
+    full_crawled_data = []
+    
+    for idx, item in enumerate(raw_links):
+        url = item['href']
+        print(f" -> [{idx+1}/{len(raw_links)}] 抓取內文: {item['title']}")
+        
+        detail_content = fetch_detail_content(url)
+        
+        full_crawled_data.append({
+            "title": item['title'],
+            "url": url,
+            "list_context": item['list_context'],
+            "content": detail_content
+        })
 
-    try:
-        soup = BeautifulSoup(resp_text, "html.parser")
-        source_name = soup.title.get_text(strip=True) if soup.title else "未命名網頁"
-        links = []
-        seen_urls = set()
-        all_a_tags = soup.find_all('a')
-        
-        garbage_words = ["跳到", "主要內容", "previous", "next", "首頁", "返回", "coreui"]
-        
-        for a_tag in all_a_tags:
-            href = a_tag.get('href')
-            title = a_tag.get_text(strip=True)
-            
-            if not href or not title or len(title) < 5: 
-                continue
-                
-            if href.startswith('#') or any(w in title.lower() for w in garbage_words):
-                continue
-                
-            full_url = urljoin(target_url, href)
-            if full_url in seen_urls: 
-                continue
-                
-            parent = a_tag.parent
-            row_text = ""
-            date_str = "0000-00-00"
-            
-            for _ in range(3):
-                if parent:
-                    row_text = parent.get_text(separator=' ', strip=True)
-                    date_match = re.search(r'(\d{2,4}[-/]\d{1,2}[-/]\d{1,2})', row_text)
-                    if date_match:
-                        date_str = date_match.group(1)
-                        break
-                    parent = parent.parent
-            
-            if date_str == "0000-00-00":
-                continue
-                
-            links.append({
-                "title": title, 
-                "href": href, 
-                "row_text": row_text,
-                "date": date_str
-            })
-            seen_urls.add(full_url)
-                    
-        return source_name, links
-    except Exception as e:
-        print(f"抓取清單解析失敗: {e}")
-        return "抓取失敗", []
+    # 寫入最原始的資料庫（一分不差）
+    with open('raw_crawled_data.json', 'w', encoding='utf-8') as f:
+        json.dump(full_crawled_data, f, ensure_ascii=False, indent=4)
+    print(f"\n[備份完成] 所有原始網頁資料已寫入 raw_crawled_data.json")
 
-def fetch_detail_content(url):
-    """【第二層】點進公告內頁，抓取乾淨的內文"""
-    html = fetch_html_robust(url)
-    if not html:
-        return ""
-    try:
-        soup = BeautifulSoup(html, "html.parser")
-        # 移除干擾雜質標籤
-        for element in soup(["script", "style", "nav", "footer", "header", "aside"]):
-            element.extract()
+    # 【階段二：AI 智慧清理與萃取】
+    print("\n[AI 處理] 開始將原始資料分批送交 Gemini 處理 (這可能需要幾分鐘)...")
+    final_announcements = []
+    batch_size = 5  # 每次送 5 筆給 AI，避免超出單次讀取上限
+    
+    for i in range(0, len(full_crawled_data), batch_size):
+        batch = full_crawled_data[i:i + batch_size]
+        print(f" -> 正在處理第 {i+1} 到 {min(i+batch_size, len(full_crawled_data))} 筆資料...")
         
-        # 取得純文字並清理空白
-        text = soup.get_text(separator=" ", strip=True)
-        text = re.sub(r'\s+', ' ', text)
+        ai_result = process_ai_batch(batch, AI_TEMPLATE, client)
         
-        # 限制字數以防 token 爆炸 (前 800 字通常最重要)
-        return text[:800]
-    except:
-        return ""
+        if ai_result and isinstance(ai_result, list):
+            # 這裡 AI 已經幫我們把垃圾連結都過濾掉了，只留下真正的公告
+            final_announcements.extend(ai_result)
 
-def process_ai_batch(batch_data, template, client):
-    """將包含標題與內文摘要的資料組合後送給 AI"""
-    batch_inputs = []
-    for i, item in enumerate(batch_data):
-        title = item['title']
-        content_snippet = item.get('content', '無內文資料')
-        batch_inputs.append(f"{i+1}. 標題: {title}\n   內文詳細內容: {content_snippet}")
+    # 寫入最終 AI 整理過的乾淨資料
+    with open('announcements.json', 'w', encoding='utf-8') as f:
+        json.dump(final_announcements, f, ensure_ascii=False, indent=4)
 
-    prompt = template.replace("{batch_input}", "\n".join(batch_inputs))
-    try:
-        response = client.models.generate_content(
-            model='gemini-3.1-flash-lite',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-            )
-        )
-        
-        raw_text = response.text.strip()
-        start_idx = raw_text.find('[')
-        end_idx = raw_text.rfind(']')
-        
-        if start_idx != -1 and end_idx != -1:
-            clean_json_str = raw_text[start_idx:end_idx + 1]
-            return json.loads(clean_json_str)
-        else:
-            return json.loads(raw_text)
-            
-    except Exception as e:
-        print(f"AI 批次解析錯誤: {e}")
-        if 'response' in locals() and hasattr(response, 'text'):
-            print(f"【AI 原始回覆內容】:\n{response.text}")
-            
-        return [{"keywords": ["解析失敗"]} for _ in batch_data]
+    print(f"\n[大功告成] AI 處理完畢！共萃取出 {len(final_announcements)} 筆有效公告，已存入 announcements.json")
+
+
+if __name__ == "__main__":
+    main()
