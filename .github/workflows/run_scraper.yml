@@ -1,9 +1,8 @@
 name: Run Scraper
 
 on:
-  # 按照你原本設定的時間：每天的 2, 6, 10, 14, 18, 22 點的 18 分自動執行
   schedule:
-    - cron: '0 * * * *'
+    - cron: '18 2,6,10,14,18,22 * * *'
   workflow_dispatch:
 
 jobs:
@@ -20,55 +19,35 @@ jobs:
           cache: 'pip'
           cache-dependency-path: '**/requirements.txt'
 
-      # 1. 升級 pip、安裝 Python 套件、並安裝 Playwright 瀏覽器核心
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          # 👇 這是啟動動態爬蟲的關鍵！
-          playwright install chromium
 
-      # 2. 保留你原本的機制：先去 gh-pages 分支把舊的資料撈出來比對
       - name: Fetch old data from gh-pages
         run: |
           git fetch origin gh-pages || true
           git show origin/gh-pages:announcements.json > announcements.json || true
 
-      # 3. 執行爬蟲主程式（帶入環境變數）
       - name: Run python script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
-        # 💡 注意：如果你之前的檔案叫 main.py，請把下面改成 python main.py
-        run: python main.py
+        run: python scraper.py
 
-      # 4. 保留你原本最強的機制：自動把新資料推送到 gh-pages 分支備份
       - name: Commit and Push to gh-pages
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # 💡 小提醒：因為你新版的 main.py 輸出檔名是 announcements_csu.jsonl，
-          # 如果你想跟舊系統對齊，可以在這裡把檔案暫存到 /tmp
-          # 以下示範假設你的主程式產出了資料（請依據你實際主程式輸出的檔名微調）
-          if [ -f announcements_csu.jsonl ]; then
-            cp announcements_csu.jsonl /tmp/announcements.json
-          elif [ -f announcements.json ]; then
-            cp announcements.json /tmp/announcements.json
-          else
-            echo "找不到新產出的資料檔案！" && exit 1
-          fi
+          cp announcements.json /tmp/announcements.json
           
           git checkout -- announcements.json || true
           
           git fetch origin gh-pages
           git checkout gh-pages
           
-          # 把新資料覆蓋過去
           cp /tmp/announcements.json announcements.json
-          
-          # 如果你有新站產出的 raw 備份檔（例如 raw_crawled_csu.json），也可以順便一起推過去：
-          # cp /home/runner/work/.../raw_crawled_*.json . || true
           
           git add announcements.json
           git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update: sync data to gh-pages" && git push origin gh-pages)
