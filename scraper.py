@@ -1,209 +1,180 @@
-import json
-import os
-import re
-import uuid
-import utils
-from datetime import datetime
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
+import urllib3  
+import urllib.request
+import ssl             
+from bs4 import BeautifulSoup
 from google import genai
+from google.genai import types
+import json
+import re
+import os
 from urllib.parse import urljoin
 
-MAX_RAW_LIMIT = 1000 
-BATCH_SIZE = 20 
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-def format_json_keywords(json_str):
-    pattern = r'"keywords":\s*\[\s*([^\]]*?)\s*\]'
-    def replace_func(match):
-        items = match.group(1).split('\n')
-        cleaned_items = [item.strip() for item in items if item.strip()]
-        joined_items = "".join(cleaned_items).replace('","', '", "')
-        return f'"keywords": [{joined_items}]'
-    return re.sub(pattern, replace_func, json_str, flags=re.DOTALL)
+def get_robust_session():
+    session = requests.Session()
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    })
+    retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+    session.mount('http://', HTTPAdapter(max_retries=retries))
+    session.mount('https://', HTTPAdapter(max_retries=retries))
+    return session
 
-def clean_and_parse_date(date_str):
-    try:
-        nums = [int(s) for s in re.findall(r'\d+', date_str)]
-        if len(nums) < 3:
-            return datetime(1970, 1, 1)
-        year, month, day = nums[0], nums[1], nums[2]
-        if year < 200:
-            year += 1911
-        return datetime(year, month, day)
-    except:
-        return datetime(1970, 1, 1)
+session = get_robust_session()
 
-def main():
-    with open("config.json", "r", encoding="utf-8") as f:
-        config = json.load(f)
-
-    print("開始執行爬蟲任務。")
-
-    history_site_backup = {} 
-    existing_uuid_map = {}
-    history_file = "announcements.json"
+def fetch_html_robust(target_url):
+    """強固型網頁原始碼抓取核心（整合 ScraperAPI 與三重保險機制）"""
+    scraper_api_key = os.environ.get("SCRAPER_API_KEY")
     
-    if os.path.exists(history_file):
+    if scraper_api_key:
+        proxy_url = "https://api.scraperapi.com/"
+        payload = {'api_key': scraper_api_key, 'url': target_url}
         try:
-            with open(history_file, "r", encoding="utf-8") as f:
-                history_data = json.load(f)
-                for site_info in history_data:
-                    if "source_link" in site_info:
-                        history_site_backup[site_info["source_link"]] = site_info
-                        
-                    for item in site_info.get("data", []):
-                        if "link" in item and "uuid" in item:
-                            existing_uuid_map[item["link"]] = item["uuid"]
-            print(f"成功載入歷史資料，共記憶了 {len(existing_uuid_map)} 筆現有的 UUID 對照。")
+            resp = requests.get(proxy_url, params=payload, timeout=30)
+            if resp.status_code == 200:
+                resp.encoding = resp.apparent_encoding
+                return resp.text
         except Exception as e:
-            print(f"讀取歷史 json 失敗或格式不符，將視為全新資料處理。錯誤原因: {e}")
+            print(f"[跳板模式異常] {target_url} 嘗試切換回原有機制... 錯誤: {e}")
 
-    allowed_years = config.get("allowed_years", [2025, 2026])
-    year_keywords = []
-    for y in allowed_years:
-        year_keywords.append(str(y))          
-        year_keywords.append(str(y - 1911))   
-    
-    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-    all_extracted_records = []
+    # 三重保險備用防線
+    try:
+        resp = session.get(target_url, timeout=15, verify=False)
+        resp.encoding = resp.apparent_encoding
+        return resp.text
+    except Exception as e:
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+            resp = requests.get(target_url, headers=headers, timeout=15, verify=False)
+            resp.encoding = resp.apparent_encoding
+            return resp.text
+        except Exception as e2:
+            try:
+                context = ssl._create_unverified_context()
+                req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, context=context, timeout=15) as response:
+                    raw_data = response.read()
+                    try:
+                        return raw_data.decode('utf-8')
+                    except UnicodeDecodeError:
+                        return raw_data.decode('big5', errors='ignore')
+            except Exception as e3:
+                print(f"[所有連線管道皆失敗] 無法連線至: {target_url}")
+                return None
 
-    # ==========================================
-    # 🛠️ 【階段一】純爬蟲階段：先爬取所有網站並儲存原始資料
-    # ==========================================
-    crawled_raw_data = {}
+def fetch_links_smart(target_url):
+    """【第一層】自動尋找網頁中帶有日期的公告連結"""
+    resp_text = fetch_html_robust(target_url)
+    if not resp_text:
+        return "抓取失敗", []
 
-    for site in config.get("sites", []):
-        target_url = site['url']
-        site_name = site['name']
+    try:
+        soup = BeautifulSoup(resp_text, "html.parser")
+        source_name = soup.title.get_text(strip=True) if soup.title else "未命名網頁"
+        links = []
+        seen_urls = set()
+        all_a_tags = soup.find_all('a')
         
-        print(f"啟動網站爬取: {site_name}")
-        source_name, all_links = utils.fetch_links_smart(target_url)
+        garbage_words = ["跳到", "主要內容", "previous", "next", "首頁", "返回", "coreui"]
         
-        if not all_links:
-            print(f"警告：{site_name} 未能偵測到任何公告，跳過本次抓取。")
-            continue
-
-        valid_items = []
-        out_of_range_count = 0 
-
-        for item in all_links[:MAX_RAW_LIMIT]:
-            is_valid_year = any(k in item['row_text'] for k in year_keywords)
-
-            if not is_valid_year:
-                out_of_range_count += 1
-                if out_of_range_count >= 3:
-                    print(f"[{site_name}] 偵測到已進入舊年份資料區，停止該網站後續處理。")
-                    break
+        for a_tag in all_a_tags:
+            href = a_tag.get('href')
+            title = a_tag.get_text(strip=True)
+            
+            if not href or not title or len(title) < 5: 
                 continue
-            
-            out_of_range_count = 0
-            valid_items.append(item)
-        
-        # 將該網站爬到的合格資料暫存起來
-        crawled_raw_data[target_url] = {
-            "site_name": site_name,
-            "source_name": source_name,
-            "valid_items": valid_items
-        }
-
-    # 💾 在呼叫 AI 之前，先把爬到的所有原始資料存成獨立的 JSON 檔案
-    raw_output_file = "raw_crawled_data.json"
-    with open(raw_output_file, "w", encoding="utf-8") as f:
-        json.dump(crawled_raw_data, f, ensure_ascii=False, indent=2)
-    print(f"🎉 已成功將所有原始爬取資料寫入 {raw_output_file}，準備進入 AI 解析階段。")
-
-    # ==========================================
-    # 🛠️ 【階段二】AI 解析階段：從暫存資料中讀取並批次送給 AI
-    # ==========================================
-    for site in config.get("sites", []):
-        target_url = site['url']
-        site_name = site['name']
-        
-        # 如果這個網站爬取失敗或被跳過，就不進行 AI 解析
-        if target_url not in crawled_raw_data:
-            continue
-            
-        site_info = crawled_raw_data[target_url]
-        source_name = site_info["source_name"]
-        valid_items = site_info["valid_items"]
-
-        print(f"[{site_name}] 開始進行每 {BATCH_SIZE} 筆分批打包解析 (共 {len(valid_items)} 筆)。")
-        
-        for i in range(0, len(valid_items), BATCH_SIZE):
-            batch = valid_items[i : i + BATCH_SIZE]
-            batch_titles = [item['title'] for item in batch]
-            
-            print(f"[{site_name}] 正在發送批次請求 (當前打包共 {len(batch_titles)} 筆)。")
-            batch_ai_results = utils.process_ai_batch(batch_titles, config['prompt_template'], client)
-            
-            for idx, item in enumerate(batch):
-                full_url = urljoin(target_url, item['href'])
-                keywords = ["解析失敗"]
-                if idx < len(batch_ai_results):
-                    keywords = batch_ai_results[idx].get("keywords", ["解析失敗"])
                 
-                all_extracted_records.append({
-                    "source_name": source_name,
-                    "source_link": target_url,
-                    "title": item['title'],
-                    "link": full_url,
-                    "keywords": keywords,
-                    "raw_date": item['date'],
-                    "parsed_datetime": clean_and_parse_date(item['date'])
-                })
+            if href.startswith('#') or any(w in title.lower() for w in garbage_words):
+                continue
+                
+            full_url = urljoin(target_url, href)
+            if full_url in seen_urls: 
+                continue
+                
+            parent = a_tag.parent
+            row_text = ""
+            date_str = "0000-00-00"
+            
+            for _ in range(3):
+                if parent:
+                    row_text = parent.get_text(separator=' ', strip=True)
+                    date_match = re.search(r'(\d{2,4}[-/]\d{1,2}[-/]\d{1,2})', row_text)
+                    if date_match:
+                        date_str = date_match.group(1)
+                        break
+                    parent = parent.parent
+            
+            if date_str == "0000-00-00":
+                continue
+                
+            links.append({
+                "title": title, 
+                "href": href, 
+                "row_text": row_text,
+                "date": date_str
+            })
+            seen_urls.add(full_url)
+                    
+        return source_name, links
+    except Exception as e:
+        print(f"抓取清單解析失敗: {e}")
+        return "抓取失敗", []
 
-    # ==========================================
-    # 後續的資料整理與寫入最終檔案 (保持原樣)
-    # ==========================================
-    all_extracted_records.sort(key=lambda x: x['parsed_datetime'], reverse=True)
-
-    site_data_map = {}
-    for rec in all_extracted_records:
-        src_url = rec['source_link']
-        if src_url not in site_data_map:
-            site_data_map[src_url] = {
-                "source_name": rec['source_name'],
-                "source_link": src_url,
-                "data": []
-            }
+def fetch_detail_content(url):
+    """【第二層】點進公告內頁，抓取乾淨的內文"""
+    html = fetch_html_robust(url)
+    if not html:
+        return ""
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        # 移除干擾雜質標籤
+        for element in soup(["script", "style", "nav", "footer", "header", "aside"]):
+            element.extract()
         
-        target_link = rec['link']
-        if target_link in existing_uuid_map:
-            assigned_uuid = existing_uuid_map[target_link]
+        # 取得純文字並清理空白
+        text = soup.get_text(separator=" ", strip=True)
+        text = re.sub(r'\s+', ' ', text)
+        
+        # 限制字數以防 token 爆炸 (前 800 字通常最重要)
+        return text[:800]
+    except:
+        return ""
+
+def process_ai_batch(batch_data, template, client):
+    """將包含標題與內文摘要的資料組合後送給 AI"""
+    batch_inputs = []
+    for i, item in enumerate(batch_data):
+        title = item['title']
+        content_snippet = item.get('content', '無內文資料')
+        batch_inputs.append(f"{i+1}. 標題: {title}\n   內文詳細內容: {content_snippet}")
+
+    prompt = template.replace("{batch_input}", "\n".join(batch_inputs))
+    try:
+        response = client.models.generate_content(
+            model='gemini-3.1-flash-lite',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+            )
+        )
+        
+        raw_text = response.text.strip()
+        start_idx = raw_text.find('[')
+        end_idx = raw_text.rfind(']')
+        
+        if start_idx != -1 and end_idx != -1:
+            clean_json_str = raw_text[start_idx:end_idx + 1]
+            return json.loads(clean_json_str)
         else:
-            assigned_uuid = str(uuid.uuid4())
-            existing_uuid_map[target_link] = assigned_uuid
-        
-        site_data_map[src_url]["data"].append({
-            "uuid": assigned_uuid,
-            "title": rec['title'],
-            "link": target_link,
-            "keywords": rec['keywords']
-        })
-
-    for site in config.get("sites", []):
-        target_url = site['url']
-        if target_url not in site_data_map:
-            if target_url in history_site_backup:
-                print(f"🛡️  [安全機制啟動] 偵測到 {site['name']} 本次連線或抓取失敗。已成功從歷史紀錄中還原舊有公告，防止檔案被清空！")
-                site_data_map[target_url] = history_site_backup[target_url]
-            else:
-                print(f"ℹ️  {site['name']} 本次無新資料且歷史無紀錄，略過。")
-
-    final_output = []
-    for site_info in site_data_map.values():
-        final_output.append({
-            "source_name": site_info["source_name"],
-            "source_link": site_info["source_link"],
-            "total_count": len(site_info["data"]),
-            "data": site_info["data"]
-        })
-
-    raw_json = json.dumps(final_output, ensure_ascii=False, indent=2)
-    final_json = format_json_keywords(raw_json)
-
-    with open("announcements.json", "w", encoding="utf-8") as f:
-        f.write(final_json)
-        
-    print("全部網站處理完畢，已成功更新資料並寫入 announcements.json。")
-
-if __name__ == "__main__":
-    main()
+            return json.loads(raw_text)
+            
+    except Exception as e:
+        print(f"AI 批次解析錯誤: {e}")
+        if 'response' in locals() and hasattr(response, 'text'):
+            print(f"【AI 原始回覆內容】:\n{response.text}")
+            
+        return [{"keywords": ["解析失敗"]} for _ in batch_data]
