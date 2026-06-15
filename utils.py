@@ -34,7 +34,7 @@ def fetch_html_robust(target_url):
     scraper_api_key = os.environ.get("SCRAPER_API_KEY")
     
     if scraper_api_key:
-        proxy_url = "[https://api.scraperapi.com/](https://api.scraperapi.com/)"
+        proxy_url = "https://api.scraperapi.com/"
         payload = {'api_key': scraper_api_key, 'url': target_url}
         try:
             resp = requests.get(proxy_url, params=payload, timeout=30)
