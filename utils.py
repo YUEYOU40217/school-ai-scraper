@@ -2,6 +2,7 @@ import os
 import re
 import json
 import ssl
+import time  # 新增時間控制，用於重試等待
 import urllib.request
 from urllib.parse import urljoin
 import requests
@@ -33,7 +34,7 @@ def fetch_html_robust(target_url):
     scraper_api_key = os.environ.get("SCRAPER_API_KEY")
     
     if scraper_api_key:
-        proxy_url = "https://api.scraperapi.com/"
+        proxy_url = "[https://api.scraperapi.com/](https://api.scraperapi.com/)"
         payload = {'api_key': scraper_api_key, 'url': target_url}
         try:
             resp = requests.get(proxy_url, params=payload, timeout=30)
@@ -84,7 +85,6 @@ def fetch_links_smart(target_url):
             href = a_tag.get('href')
             title = a_tag.get_text(strip=True)
             
-            # 排除無效點擊
             if not href or href.startswith('#') or href.startswith('javascript:'):
                 continue
                 
@@ -92,7 +92,6 @@ def fetch_links_smart(target_url):
             if full_url in seen_urls: 
                 continue
                 
-            # 抓取該連結「上下三層父節點」內的所有文字
             parent = a_tag.parent
             row_text = ""
             for _ in range(3):
@@ -139,31 +138,44 @@ def fetch_detail_content(url):
         return f"[內頁文字解析異常]: {e}"
 
 def process_ai_batch(batch_data, template, client):
-    """將包含 uuid 的原始資料轉為 JSON 送交 AI 解析，並具備最安全的 Markdown 防禦清理"""
+    """將包含 uuid 的原始資料轉為 JSON 送交 AI 解析，具備打死不退的重試防禦機制"""
     batch_input_str = json.dumps(batch_data, ensure_ascii=False)
     prompt = template.replace("{batch_input}", batch_input_str)
     
-    try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
-        )
-        
-        ai_text = response.text.strip()
-        
-        # 安全防禦機制：用最簡單的 replace 替換掉可能破壞 JSON 解析的 Markdown 區塊
-        if ai_text.startswith("```"):
-            ai_text = ai_text.replace("```json", "")
-            ai_text = ai_text.replace("```", "")
+    max_retries = 5  # 最大重試次數
+    
+    for attempt in range(max_retries):
+        try:
+            # 升級亮點：強制指定 response_mime_type 為 JSON，讓 3.1 Flash-Lite 原生輸出完美結構
+            response = client.models.generate_content(
+                model='gemini-3.1-flash-lite',
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
+            )
             
-        ai_text = ai_text.strip()
-        
-        result_list = json.loads(ai_text)
-        return result_list
-        
-    except json.JSONDecodeError as je:
-        print(f"AI 回傳資料解析 JSON 失敗: {je}")
-        return []
-    except Exception as e:
-        print(f"AI 批次解析發生錯誤: {e}")
-        return []
+            ai_text = response.text.strip()
+            
+            # 安全清理（以防萬一）
+            if ai_text.startswith("```"):
+                ai_text = ai_text.replace("```json", "").replace("```", "")
+            ai_text = ai_text.strip()
+            
+            # 嘗試解析 JSON
+            result_list = json.loads(ai_text)
+            return result_list
+            
+        except Exception as e:
+            print(f"   ⚠️ [AI 處理失敗] 第 {attempt + 1}/{max_retries} 次嘗試失敗。")
+            print(f"      錯誤原因: {e}")
+            
+            if attempt < max_retries - 1:
+                # 遞增等待機制（Exponential Backoff 的變形）：第一次等 20 秒，第二次等 40 秒... 
+                # 這能完美避開 Google 免費版的每分鐘限制（Rate Limit 429）與暫時性塞車（503）
+                sleep_seconds = (attempt + 1) * 20
+                print(f"      [防禦機制啟動] 將在 {sleep_seconds} 秒後「重新嘗試」處理本批資料...")
+                time.sleep(sleep_seconds)
+            else:
+                print("   ❌ [嚴重錯誤] 已達到最大重試次數，本批資料被迫跳過。")
+                return []
