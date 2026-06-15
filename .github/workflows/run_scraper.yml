@@ -40,14 +40,20 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
+          # 將兩個 JSON 都先複製到暫存區
           cp announcements.json /tmp/announcements.json
+          cp raw_crawled_data.json /tmp/raw_crawled_data.json || true
           
-          git checkout -- announcements.json || true
+          # 放棄目前分支的變更，準備切換
+          git checkout -- announcements.json raw_crawled_data.json || true
           
           git fetch origin gh-pages
           git checkout gh-pages
           
+          # 從暫存區放回 gh-pages 分支
           cp /tmp/announcements.json announcements.json
+          cp /tmp/raw_crawled_data.json raw_crawled_data.json || true
           
-          git add announcements.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update: sync data to gh-pages" && git push origin gh-pages)
+          # 同時追蹤並提交這兩個檔案
+          git add announcements.json raw_crawled_data.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto update: sync data and raw logs to gh-pages" && git push origin gh-pages)
