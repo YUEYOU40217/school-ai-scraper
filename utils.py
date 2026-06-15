@@ -33,7 +33,6 @@ def fetch_html_robust(target_url):
     """強固型網頁原始碼抓取核心（整合 ScraperAPI 與三重後援防線）"""
     scraper_api_key = os.environ.get("SCRAPER_API_KEY")
     
-    # 優先防線：如果環境變數有 ScraperAPI Key，就走跳板防封鎖
     if scraper_api_key:
         proxy_url = "https://api.scraperapi.com/"
         payload = {'api_key': scraper_api_key, 'url': target_url}
@@ -45,20 +44,17 @@ def fetch_html_robust(target_url):
         except Exception as e:
             print(f"[跳板模式異常] {target_url} 嘗試切換回原有機制... 錯誤: {e}")
 
-    # 第一重後援：標準 Requests Session (帶重試機制)
     try:
         resp = session.get(target_url, timeout=15, verify=False)
         resp.encoding = resp.apparent_encoding
         return resp.text
     except Exception as e:
-        # 第二重後援：乾淨的全新 Requests 請求 (無視乾淨 Header 阻擋)
         try:
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
             resp = requests.get(target_url, headers=headers, timeout=15, verify=False)
             resp.encoding = resp.apparent_encoding
             return resp.text
         except Exception as e2:
-            # 第三重後援：最底層的 urllib 原生連線 (強行繞過部分頑固防火牆)
             try:
                 context = ssl._create_unverified_context()
                 req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -73,7 +69,7 @@ def fetch_html_robust(target_url):
                 return None
 
 def fetch_links_smart(target_url):
-    """【第一層】全量掃描網頁，尋找工作區內所有帶有日期的公告連結"""
+    """【第一層】無差別全量掃描網頁，抓取列表頁上「所有」連結與周邊文字（零過濾）"""
     resp_text = fetch_html_robust(target_url)
     if not resp_text:
         return "抓取失敗", []
@@ -85,19 +81,12 @@ def fetch_links_smart(target_url):
         seen_urls = set()
         all_a_tags = soup.find_all('a')
         
-        # 過濾常見的無效導覽字眼
-        garbage_words = ["跳到", "主要內容", "previous", "next", "首頁", "返回", "coreui"]
-        
         for a_tag in all_a_tags:
             href = a_tag.get('href')
             title = a_tag.get_text(strip=True)
             
-            # 標題太短或根本沒超連結的直接剔除
-            if not href or not title or len(title) < 5: 
-                continue
-                
-            # 排除錨點與導覽垃圾連結
-            if href.startswith('#') or any(w in title.lower() for w in garbage_words):
+            # 只排除真正沒寫網址、或點擊無效的空標籤
+            if not href or href.startswith('#') or href.startswith('javascript:'):
                 continue
                 
             # 補全相對路徑網址
@@ -105,66 +94,72 @@ def fetch_links_smart(target_url):
             if full_url in seen_urls: 
                 continue
                 
+            # 抓取該連結「上下三層父節點」內的所有文字（一分不差地保留它在畫面上周邊的所有文字）
             parent = a_tag.parent
             row_text = ""
-            date_str = "0000-00-00"
-            
-            # 往上回溯三層父節點，尋找鄰近該連結的日期標籤
             for _ in range(3):
                 if parent:
                     row_text = parent.get_text(separator=' ', strip=True)
-                    date_match = re.search(r'(\d{2,4}[-/]\d{1,2}[-/]\d{1,2})', row_text)
-                    if date_match:
-                        date_str = date_match.group(1)
+                    if len(row_text) > len(title):
                         break
                     parent = parent.parent
             
-            # 如果附近完全找不到任何日期，代表這不是公告，不予抓取
-            if date_str == "0000-00-00":
-                continue
-                
+            # 哪怕標題是空的，只要有周邊文字，我們就留著，絕不自作聰明幫你刪除
+            display_title = title if title else (row_text[:30] if row_text else "未命名連結")
+            
             links.append({
-                "title": title, 
-                "href": href, 
-                "row_text": row_text,
-                "date": date_str
+                "title": display_title, 
+                "href": full_url, 
+                "list_context": row_text if row_text else display_title
             })
             seen_urls.add(full_url)
                     
+        print(f"[全量清單掃描成功] 共撈到 {len(links)} 個連結，即將進行無差別深度抓取。")
         return source_name, links
     except Exception as e:
         print(f"抓取清單解析失敗: {e}")
         return "抓取失敗", []
 
 def fetch_detail_content(url):
-    """【第二層】深入公告內頁，刮除雜質並抓取純淨的內文"""
+    """【第二層】深入公告內頁，一分不差地抓取全部純文字內容"""
+    # 如果是常見的附件檔案（如 PDF, DOCX 等），直接回傳檔案網址，不強行當作網頁解析
+    if any(url.lower().endswith(ext) for ext in ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.odt', '.zip', '.rar']):
+        return f"[此為附件檔案，請參閱連結] {url}"
+
     html = fetch_html_robust(url)
     if not html:
-        return ""
+        return "[內頁網頁讀取失敗]"
     try:
         soup = BeautifulSoup(html, "html.parser")
         
-        # 暴力拔除網頁頁首、頁尾、選單、腳本等無關內容
-        for element in soup(["script", "style", "nav", "footer", "header", "aside"]):
+        # 只拔除絕對不會有公告內容的背後腳本與樣式，其餘（含 header/footer）完全保留，保證一分不差
+        for element in soup(["script", "style"]):
             element.extract()
         
-        # 取得內頁純文字並壓縮空白
+        # 取得內頁「完整純文字」並壓縮連續空白符號
         text = soup.get_text(separator=" ", strip=True)
         text = re.sub(r'\s+', ' ', text)
         
-        # 限制字數在前 800 字（通常重點精華都在前段，防止餵給 AI 時 token 爆炸）
-        return text[:800]
-    except:
-        return ""
+        return text if text else "[此網頁無文字內容]"
+    except Exception as e:
+        return f"[內頁文字解析異常]: {e}"
 
 def process_ai_batch(batch_data, template, client):
-    """將含有「標題+詳細內文」的資料組合，批次送交 Gemini 解析"""
+    """將含有「標題 + 列表周邊上下文 + 內頁完整內文」的資料組合，批次送交 Gemini 解析"""
     batch_inputs = []
     for i, item in enumerate(batch_data):
         title = item['title']
-        content_snippet = item.get('content', '無內文資料')
-        # 把豐富的內頁內容塞進 Prompt
-        batch_inputs.append(f"{i+1}. 標題: {title}\n   內文詳細內容: {content_snippet}")
+        list_context = item.get('list_context', '無週邊文字')
+        full_content = item.get('content', '無內文資料')
+        
+        # 組裝毫無遺漏的資訊餵給 AI
+        batch_inputs.append(
+            f"項目 {i+1}:\n"
+            f"  - 標題: {title}\n"
+            f"  - 列表頁週邊文字: {list_context}\n"
+            f"  - 內頁完整內文: {full_content}\n"
+            f"----------------------------------------"
+        )
 
     prompt = template.replace("{batch_input}", "\n".join(batch_inputs))
     try:
