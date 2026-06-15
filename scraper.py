@@ -4,7 +4,7 @@ import json
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from google import genai
-from util import fetch_html_text, process_ai_batch
+from utils import fetch_html_text, process_ai_batch
 
 def parse_html_to_links(html_text, target_url):
     """解析 HTML 並萃取深度達 6 層的公告與日期"""
