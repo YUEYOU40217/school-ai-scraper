@@ -8,7 +8,7 @@ from google import genai
 from utils import fetch_links_smart, fetch_detail_content, process_ai_batch
 
 # ========================================================
-# 1. AI 提示詞定義 (保持原樣，專注於精準解析)
+# 1. AI 提示詞定義
 # ========================================================
 AI_TEMPLATE = """你現在是台灣大專院校的公告解析與資料清理專家。
 我會提供一批從學校網頁爬取下來的「可能包含雜訊」的原始資料。
@@ -88,67 +88,80 @@ def main():
     current_template = AI_TEMPLATE.format(target_years=target_years_str, batch_input="{batch_input}")
 
     all_raw_data = []
-    
-    # 紀錄每個目標網站的元資料，以便後續分類與檔名生成
     site_meta_map = {}
 
     # --------------------------------------------------------
-    # 階段 A: 爬取所有網頁內容
+    # 階段 A: 爬取所有網頁內容，並「每爬完一站就單獨存一個 raw 檔」
     # --------------------------------------------------------
-    for idx_site, site in enumerate(sites):
+    for site in sites:
         school_name = site.get("name", "未知學校")
         target_url = site.get("url")
 
         if not target_url:
             continue
 
-        print(f"\n[開始執行] 目標: {school_name} | {target_url}")
+        print(f"\n========================================")
+        print(f"[開始執行] 目標: {school_name} | {target_url}")
+        print(f"========================================")
+        
         source_name, raw_links = fetch_links_smart(target_url)
         if not raw_links:
             continue
             
-        # 紀錄網站資訊 (如果有多個網址屬於同間學校，加上 idx_site 避免檔名覆蓋)
-        short_name_base = get_url_short_name(target_url)
+        # 取得乾淨的短檔名 (不再加任何數字後綴)
+        short_name = get_url_short_name(target_url)
         site_meta_map[target_url] = {
             "name": f"{school_name} - {source_name}",
             "url": target_url,
-            "short_name": f"{short_name_base}_{idx_site+1}" # 例如: csu_1
+            "short_name": short_name
         }
+
+        # 用來裝「這一個單一目標」的原始資料
+        current_site_raw_data = []
 
         for idx, item in enumerate(raw_links):
             url = item['href']
             print(f" -> [{idx+1}/{len(raw_links)}] 抓取內文: {item['title']}")
             detail_content = fetch_detail_content(url)
             
-            all_raw_data.append({
+            data_item = {
                 "uuid": str(uuid.uuid4()),
                 "school_name": school_name,
                 "title": item['title'],
                 "link": url,
                 "list_context": item['list_context'],
                 "content": detail_content,
-                "source_url": target_url # 標記資料來源，後續才能打包對應
-            })
+                "source_url": target_url
+            }
+            
+            current_site_raw_data.append(data_item)
+            all_raw_data.append(data_item)
+
+        # ✨ 新功能：這站爬完後，立刻輸出一個這站專屬的 raw 檔案讓你檢查
+        if current_site_raw_data:
+            raw_filename = f"raw_crawled_{short_name}.json"
+            with open(raw_filename, 'w', encoding='utf-8') as f:
+                json.dump(current_site_raw_data, f, ensure_ascii=False, indent=4)
+            print(f"📦 [單站備份] {school_name} 的原始抓取資料已存入 {raw_filename}，你可以馬上打開來檢查爬了什麼！")
 
     if not all_raw_data:
         print("\n[結束] 未抓取到任何有效資料。")
         return
 
     # --------------------------------------------------------
-    # 階段 B: 備份原始資料與 AI 批次處理
+    # 階段 B: 送交 AI 批次處理
     # --------------------------------------------------------
-    with open('raw_crawled_data.json', 'w', encoding='utf-8') as f:
-        json.dump(all_raw_data, f, ensure_ascii=False, indent=4)
-
+    print("\n🤖 開始將所有資料分批送交 Gemini AI 進行過濾與清理...")
     final_announcements = []
     batch_size = 15  
     
     for i in range(0, len(all_raw_data), batch_size):
         batch = all_raw_data[i:i + batch_size]
+        print(f" -> 正在處理第 {i+1} 到 {min(i+batch_size, len(all_raw_data))} 筆資料...")
         ai_result = process_ai_batch(batch, current_template, client)
         
         if ai_result and isinstance(ai_result, list):
-            # 還原被 AI 漏掉的原始網站對應 (重要！這樣才能依網站分檔)
+            # 還原來源網址對應，以便後續分檔
             uuid_to_source = {item["uuid"]: item["source_url"] for item in batch}
             for ann in ai_result:
                 ann_uuid = ann.get("uuid")
@@ -157,7 +170,7 @@ def main():
             final_announcements.extend(ai_result)
         
         if i + batch_size < len(all_raw_data):
-            time.sleep(10)
+            time.sleep(8) # 減緩頻率避免塞車
 
     # --------------------------------------------------------
     # 階段 C: 年份過濾
@@ -176,27 +189,26 @@ def main():
         filtered_announcements = final_announcements
 
     # ========================================================
-    # 階段 D: 分流輸出至獨立的 JSONL 檔案 (核心客製化邏輯)
+    # 階段 D: 分流輸出至獨立的 JSONL 檔案
     # ========================================================
+    print("\n📂 開始打包最終乾淨資料...")
     
-    # 1. 將過濾後的公告依照來源網址 (source_url) 進行分組
     grouped_announcements = defaultdict(list)
     for ann in filtered_announcements:
         source_url = ann.get("source_url")
         if source_url:
             grouped_announcements[source_url].append(ann)
 
-    # 2. 遍歷每個目標網站，各自獨立產出一個 JSONL 檔案
     for url, meta in site_meta_map.items():
-        short_name = meta["short_name"] # 包含流水號避免覆蓋，例如 csu_1
+        short_name = meta["short_name"] 
         site_announcements = grouped_announcements.get(url, [])
         total_count = len(site_announcements)
         
-        # 設定獨立檔名
+        # 乾淨的檔名：announcements_csu.jsonl
         filename = f"announcements_{short_name}.jsonl"
         
         with open(filename, 'w', encoding='utf-8') as f:
-            # 第一行：寫入網站元資料 (Header)
+            # 第一行：網站元資料 (Header)
             header_object = {
                 "source_name": meta["name"],
                 "source_link": meta["url"],
@@ -204,23 +216,22 @@ def main():
             }
             f.write(json.dumps(header_object, ensure_ascii=False) + '\n')
             
-            # 第二行開始：寫入一條條打平的公告 (Body)
+            # 第二行開始：打平的公告 (Body)
             for ann in site_announcements:
-                # 確保關鍵字是陣列
                 keywords_list = ann.get("keywords", [])
                 if not isinstance(keywords_list, list):
                     keywords_list = [str(keywords_list)]
                     
                 ann_object = {
                     "uuid": ann.get("uuid"),
-                    "short_name": short_name.split('_')[0], # 去掉後面的流水號，保持原簡稱
+                    "short_name": short_name,
                     "title": ann.get("title"),
                     "link": ann.get("link"),
                     "keywords": keywords_list
                 }
                 f.write(json.dumps(ann_object, ensure_ascii=False) + '\n')
         
-        print(f"\n[打包完畢] 網站【{meta['name']}】已獨立輸出至 {filename}，共 {total_count} 條公告。")
+        print(f"✅ [打包完畢] 網站【{meta['name']}】已獨立輸出至 {filename}，共 {total_count} 條有效公告。")
 
 if __name__ == "__main__":
     main()
