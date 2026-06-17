@@ -1,25 +1,61 @@
 name: Hourly Auto Scraper
+
 on:
   schedule:
     - cron: "0 * * * *"
   workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
   scrape-and-update:
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: 1. 取得主程式碼 (main 分支)
+        uses: actions/checkout@v4
+
+      - name: 2. 取得舊資料 (為了保留舊 UUID)
+        # 關鍵步驟：去 gh-pages 分支把上一小時的舊 JSONL 抓下來給 Python 讀取
+        run: |
+          git clone --branch gh-pages "https://github.com/${{ github.repository }}.git" gh-pages-data || echo "gh-pages 分支不存在，略過"
+          if [ -d "gh-pages-data/formatted_jsonl" ]; then
+            cp -r gh-pages-data/formatted_jsonl ./
+          fi
+
+      - name: 3. 設定 Python 環境
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-      - name: Install dependencies
+
+      - name: 4. 安裝依賴套件
         run: |
-          pip install requests urllib3
-      - name: Run Scraper
-        run: python main.py
-      - name: Deploy
+          python -m pip install --upgrade pip
+          pip install requests urllib3 google-generativeai
+
+      - name: 5. 執行爬蟲抓取 HTML
+        run: |
+          python main.py
+
+      - name: 6. 執行 AI 整理 (鎖定 UUID 與 5 個關鍵字)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python parse_with_ai.py
+
+      - name: 7. 集中打包要發佈的「純資料夾」
+        # 把要發佈的資料夾集中到 deploy_dir，確保 gh-pages 只有資料，沒有程式碼
+        run: |
+          mkdir -p deploy_dir
+          cp -r scraped_pages deploy_dir/ || true
+          cp -r formatted_jsonl deploy_dir/ || true
+
+      - name: 8. 部署純資料至 gh-pages 分支
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./scraped_pages
+          publish_branch: gh-pages
+          publish_dir: ./deploy_dir  # 只推送純資料夾
+          keep_files: false          # 覆蓋清理舊垃圾，保持分支乾淨
+          commit_message: "Auto-update: Sync HTML and AI formatted JSONL data"
