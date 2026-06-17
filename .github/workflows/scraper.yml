@@ -2,8 +2,8 @@ name: Hourly Auto Scraper
 
 on:
   schedule:
-    - cron: "0 * * * *"
-  workflow_dispatch:
+    - cron: "0 * * * *"  # 每小時整點執行一次
+  workflow_dispatch:      # 支援手動觸發
 
 permissions:
   contents: write
@@ -17,11 +17,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 2. 取得舊資料 (為了保留舊 UUID)
-        # 關鍵步驟：去 gh-pages 分支把上一小時的舊 JSONL 抓下來給 Python 讀取
+        # 去 gh-pages 分支把上一小時的最終成果抓下來，讓 Python 可以比對並鎖定 UUID
         run: |
-          git clone --branch gh-pages "https://github.com/${{ github.repository }}.git" gh-pages-data || echo "gh-pages 分支不存在，略過"
-          if [ -d "gh-pages-data/formatted_jsonl" ]; then
-            cp -r gh-pages-data/formatted_jsonl ./
+          git clone --branch gh-pages "https://github.com/${{ github.repository }}.git" gh-pages-data || echo "gh-pages 分支還不存在，略過"
+          if [ -d "gh-pages-data/final_results" ]; then
+            cp -r gh-pages-data/final_results ./
           fi
 
       - name: 3. 設定 Python 環境
@@ -34,28 +34,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests urllib3 google-generativeai
 
-      - name: 5. 執行爬蟲抓取 HTML
+      - name: 5. 執行整合主程式 (包含爬蟲與 AI 摘要)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
         run: |
           python main.py
 
-      - name: 6. 執行 AI 整理 (鎖定 UUID 與 5 個關鍵字)
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          python parse_with_ai.py
-
-      - name: 7. 集中打包要發佈的「純資料夾」
-        # 把要發佈的資料夾集中到 deploy_dir，確保 gh-pages 只有資料，沒有程式碼
-        run: |
-          mkdir -p deploy_dir
-          cp -r scraped_pages deploy_dir/ || true
-          cp -r formatted_jsonl deploy_dir/ || true
-
-      - name: 8. 部署純資料至 gh-pages 分支
+      - name: 6. 部署整個專案與成果至 gh-pages 分支
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: ./deploy_dir  # 只推送純資料夾
-          keep_files: false          # 覆蓋清理舊垃圾，保持分支乾淨
-          commit_message: "Auto-update: Sync HTML and AI formatted JSONL data"
+          publish_dir: .            # 核心變更：將整個專案目錄（含程式、暫存與成果資料夾）全部推入分支
+          keep_files: false         # 每次都以最新狀態覆蓋，保持分支乾淨不殘留舊垃圾
+          commit_message: "Auto-update: Sync full project and newly scraped results"
