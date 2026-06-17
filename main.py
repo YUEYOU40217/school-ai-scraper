@@ -11,6 +11,13 @@ def main():
     crawler_output_root = "crawler_pages"   # 爬蟲爬完後的暫存資料夾
     final_results_root = "final_results"     # 最終成果的資料夾
     
+    # 2. 自動建立暫存與最終成果的根資料夾
+    os.makedirs(crawler_output_root, exist_ok=True)
+    os.makedirs(final_results_root, exist_ok=True)
+    print(f"[系統初始化] 已自動建立/確認必要資料夾：")
+    print(f"  -> 暫存資料夾: {crawler_output_root}/")
+    print(f"  -> 最終成果資料夾: {final_results_root}/\n")
+    
     # 初始化 AI 模組並檢查 API Key
     api_key = os.environ.get("GEMINI_API_KEY")
     ai_ready = ai_parser.init_ai(api_key)
