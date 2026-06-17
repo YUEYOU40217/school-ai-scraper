@@ -1,45 +1,26 @@
 import os
-import json
-import requests
-import urllib3
-import time
 import glob
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-def fetch_content(config, page=None):
-    url = config.get("url_pattern")
-    if page and "{page}" in url:
-        url = url.replace("{page}", str(page))
-    
-    raw_headers = config.get("headers")
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"} if (raw_headers == "Nope" or not raw_headers) else raw_headers
-
-    raw_method = config.get("method")
-    method = "GET" if (raw_method == "Nope" or not raw_method) else raw_method.upper()
-    
-    raw_payload = config.get("payload")
-    payload = None if (raw_payload == "Nope" or not raw_payload) else raw_payload
-    
-    try:
-        if method == "POST":
-            response = requests.post(url, headers=headers, json=payload, verify=False, timeout=15)
-        else:
-            response = requests.get(url, headers=headers, params=payload, verify=False, timeout=15)
-            
-        response.encoding = response.apparent_encoding
-        return response.text
-    except Exception as e:
-        print(f"      [錯誤] 連線失敗: {e}")
-        return None
+import json
+import scraper
+import ai_parser
 
 def main():
-    print("啟動爬蟲下載引擎...\n")
-    config_files = sorted(glob.glob("configs/web*.json"))
-    base_output_dir = "scraped_pages"
+    print("啟動自動化整合引擎...\n")
     
+    # 定義基礎儲存路徑
+    base_scrape_dir = "scraped_pages"
+    base_jsonl_dir = "formatted_jsonl"
+    
+    # 初始化 AI 模組
+    api_key = os.environ.get("GEMINI_API_KEY")
+    ai_ready = ai_parser.init_ai(api_key)
+    if not ai_ready:
+        print("[警告] 找不到環境變數 GEMINI_API_KEY，將略過 AI 解析，僅執行爬蟲。")
+
+    # 取得所有設定檔
+    config_files = sorted(glob.glob("configs/web*.json"))
     if not config_files:
-        print("[錯誤] 找不到設定檔。")
+        print("[錯誤] 找不到設定檔，請檢查 configs/ 資料夾。")
         return
 
     for config_file in config_files:
@@ -47,30 +28,24 @@ def main():
             try:
                 config = json.load(f)
             except Exception:
+                print(f"[錯誤] 無法解析 JSON 設定檔: {config_file}")
                 continue
         
         site_name = config.get("site_name", "Unknown_Site")
-        
-        # 建立專屬資料夾，例如：scraped_pages/正修全部公告/
-        site_output_dir = os.path.join(base_output_dir, site_name)
-        os.makedirs(site_output_dir, exist_ok=True)
-        print(f"目標網站: {site_name} -> 存檔位置: {site_output_dir}/")
-        
-        start_page = config.get("start_page", 1)
-        end_page = config.get("end_page", 1)
-        raw_delay = config.get("delay")
-        delay = 0.5 if (raw_delay == "Nope" or raw_delay is None) else float(raw_delay)
-        
-        for page in range(start_page, end_page + 1):
-            content = fetch_content(config, page)
-            if content:
-                file_path = os.path.join(site_output_dir, f"page_{page}.html")
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(content)
-                print(f"      -> 已儲存第 {page} 頁: {file_path}")
-            time.sleep(delay)
+        print(f"\n{'='*40}")
+        print(f"開始處理專案: {site_name}")
+        print(f"{'='*40}")
 
-    print("\n所有 HTML 下載任務執行完畢！")
+        # 第一階段：爬蟲下載
+        print("\n[階段 1] 執行網頁爬蟲...")
+        site_html_dir = scraper.run_spider(config, base_scrape_dir)
+
+        # 第二階段：AI 解析與整合
+        if ai_ready and site_html_dir:
+            print("\n[階段 2] 執行 AI 內容解析...")
+            ai_parser.run_parser(site_name, site_html_dir, base_jsonl_dir)
+
+    print("\n所有自動化任務執行完畢！")
 
 if __name__ == "__main__":
     main()
