@@ -6,14 +6,16 @@ on:
     - cron: "0 * * * *"
   workflow_dispatch: # 保留手動觸發按鈕
 
+# 給予 GitHub Actions 推送程式碼到分支的權限
 permissions:
   contents: write
 
 jobs:
-  build-and-deploy:
+  scrape-and-update:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: 1. 檢查原始碼
+      - name: 1. 取得最新主程式碼
         uses: actions/checkout@v4
 
       - name: 2. 設定 Python 環境
@@ -21,21 +23,19 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: 3. 安裝必要套件
+      - name: 3. 安裝精簡版依賴套件
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 urllib3
+          pip install requests urllib3
 
-      - name: 4. 執行全新爬蟲程式
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+      - name: 4. 執行模組化爬蟲主程式
         run: |
-          python scraper.py
+          python main.py
 
-      - name: 5. 部署資料至 gh-pages 分支
+      - name: 5. 部署抓取資料至 gh-pages 分支
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
-          commit_message: "Automated data update [skip ci]"
+          publish_branch: gh-pages
+          publish_dir: ./scraped_pages
+          commit_message: "Auto-update: Sync latest scraped pages"
