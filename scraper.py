@@ -14,28 +14,19 @@ def start_scraping():
 
     soup = BeautifulSoup(html_content, "html.parser")
     announcements = []
-    processed_urls = set()
 
-    # 地毯式掃描所有連結標籤
-    for anchor in soup.find_all("a"):
+    # 抓取頁面中「所有」的 <a> 標籤，不放過任何一個
+    all_anchors = soup.find_all("a")
+    print(f"網頁偵測完成，共發現 {len(all_anchors)} 個原始連結項目。開始全量封裝...")
+
+    for index, anchor in enumerate(all_anchors, start=1):
         href = anchor.get("href")
-        if not href:
-            continue
-
-        # 補全相對路徑為絕對路徑
-        full_url = urljoin(target_url, href)
-        
-        # 排除非網頁連結與重複連結
-        if not full_url.startswith("http") or full_url in processed_urls:
-            continue
-
         title = clean_pure_text(anchor.get_text())
         
-        # 過濾明顯屬於網站選單、導覽列的無效文字
-        if len(title) < 4 or any(kw in title.lower() for kw in ["跳到", "首頁", "menu", "login", "english", "search", "交通"]):
-            continue
+        # 即使沒有網址或沒有文字，也保留這筆資料（確保無損）
+        full_url = urljoin(target_url, href) if href else "NO_HREF"
 
-        # 尋找日期：1. 先從標題字串找 2. 找不到則往上遞迴 5 層父節點容器尋找
+        # 向上追溯 5 層尋找該區塊的日期
         date_found = match_date_format(title)
         if not date_found:
             parent_node = anchor
@@ -48,20 +39,20 @@ def start_scraping():
                 if date_found:
                     break
 
-        # 若仍無日期，則標記為 UNRESOLVED
-        final_date = date_found if date_found else "UNRESOLVED"
+        final_date = date_found if date_found else "NO_DATE"
 
+        # 毫無保留，全部打包
         announcements.append({
-            "title": title,
+            "index": index,
+            "title": title if title else "EMPTY_TEXT",
             "href": full_url,
             "date": final_date
         })
-        processed_urls.add(full_url)
 
     return announcements
 
 def main():
-    print("啟動全量無損爬蟲更新管線...")
+    print("啟動【零篩選・全量網頁內容抓取】管線...")
     scraped_data = start_scraping()
     
     # 建立符合 GitHub Actions 部署要求的 public 目錄
@@ -71,7 +62,7 @@ def main():
     output_file_path = os.path.join(output_folder, "data.json")
     
     payload = {
-        "site_name": "正修科技大學公告監控",
+        "site_name": "正修科技大學全網頁原始連結備份",
         "total_records": len(scraped_data),
         "data": scraped_data
     }
@@ -79,7 +70,7 @@ def main():
     with open(output_file_path, "w", encoding="utf-8") as json_file:
         json.dump(payload, json_file, ensure_ascii=False, indent=4)
         
-    print(f"任務完成。成功將 {len(scraped_data)} 筆全量數據寫入 {output_file_path}")
+    print(f"任務完成。已將 {len(scraped_data)} 筆最原始的網頁資料寫入 {output_file_path}")
 
 if __name__ == "__main__":
     main()
