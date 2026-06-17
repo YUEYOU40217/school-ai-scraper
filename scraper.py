@@ -6,6 +6,9 @@ import time
 # 停用不安全連線警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# 核心修改：從環境變數讀取爬蟲專用 API Key
+SCRAPER_API_KEY = os.environ.get("SCRAPER_API_KEY")
+
 def fetch_content(config, page=None):
     url = config.get("url_pattern")
     if page and "{page}" in url:
@@ -18,8 +21,37 @@ def fetch_content(config, page=None):
     method = "GET" if (raw_method == "Nope" or not raw_method) else raw_method.upper()
     
     raw_payload = config.get("payload")
-    payload = None if (raw_payload == "Nope" or not raw_payload) else raw_payload
+    payload = {} if (raw_payload == "Nope" or not raw_payload) else raw_payload
     
+    # -------------------------------------------------------------
+    # 【API Key 整合邏輯】
+    # 根據你使用的爬蟲/代理服務類型，取消下方其中一種常見做法的註解：
+    # -------------------------------------------------------------
+    if SCRAPER_API_KEY:
+        # 作法 A：如果是當作 Header 傳送（例如：自訂 API、Crawlbase 等）
+        # headers["X-Scraper-API-Key"] = SCRAPER_API_KEY
+        # headers["Authorization"] = f"Bearer {SCRAPER_API_KEY}"
+        
+        # 作法 B：如果是串接轉發代理服務（例如：ScraperAPI）
+        # 需要將目標網址當作參數傳給代理伺服器
+        # proxy_params = {"api_key": SCRAPER_API_KEY, "url": url}
+        # if method == "GET":
+        #     payload.update(proxy_params)
+        #     # 此時連線目標會變成代理伺服器的 URL，這裡僅作示意
+        #     # url = "http://api.scraperapi.com" 
+        
+        # 作法 C：直接附加在網址後方作為 Query String
+        # if "?" in url:
+        #     url = f"{url}&apikey={SCRAPER_API_KEY}"
+        # else:
+        #     url = f"{url}?apikey={SCRAPER_API_KEY}"
+        
+        # 提示：目前預設僅作 Log 顯示，確認有成功讀取
+        print(f"      [資訊] 已載入 SCRAPER_API_KEY (長度: {len(SCRAPER_API_KEY)})")
+    else:
+        print("      [提示] 未偵測到 SCRAPER_API_KEY，將使用常規 IP 直接連線。")
+    # -------------------------------------------------------------
+
     try:
         if method == "POST":
             response = requests.post(url, headers=headers, json=payload, verify=False, timeout=15)
