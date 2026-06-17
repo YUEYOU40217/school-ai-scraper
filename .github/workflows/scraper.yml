@@ -1,41 +1,25 @@
 name: Hourly Auto Scraper
-
 on:
   schedule:
-    # 每個整點執行一次 (UTC 時間)
     - cron: "0 * * * *"
-  workflow_dispatch: # 保留手動觸發按鈕
-
-# 給予 GitHub Actions 推送程式碼到分支的權限
+  workflow_dispatch:
 permissions:
   contents: write
-
 jobs:
   scrape-and-update:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: 1. 取得最新主程式碼
-        uses: actions/checkout@v4
-
-      - name: 2. 設定 Python 環境
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-
-      - name: 3. 安裝精簡版依賴套件
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install requests urllib3
-
-      - name: 4. 執行模組化爬蟲主程式
-        run: |
-          python main.py
-
-      - name: 5. 部署抓取資料至 gh-pages 分支
+      - name: Run Scraper
+        run: python main.py
+      - name: Deploy
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
           publish_dir: ./scraped_pages
-          commit_message: "Auto-update: Sync latest scraped pages"
