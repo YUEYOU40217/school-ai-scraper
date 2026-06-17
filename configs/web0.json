@@ -1,0 +1,8 @@
+{
+    "site_name": "正修全部公告",
+    "url_pattern": "https://www.csu.edu.tw/p/403-1000-13-{page}.php?Lang=zh-tw",
+    "rule": "api_pagination",
+    "start_page": 1,
+    "end_page": 14,
+    "description": "處理無限滾動，透過 API 規律直接抓取 1 到 14 頁的 HTML"
+}
