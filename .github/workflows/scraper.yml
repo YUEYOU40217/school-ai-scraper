@@ -1,21 +1,19 @@
-name: Hourly Scraper to GH-Pages
+name: Hourly Auto Scraper
 
 on:
   schedule:
-    # 每個整點執行 (UTC 時間，這不影響每小時執行的頻率)
+    # 每個整點執行一次 (UTC 時間)
     - cron: "0 * * * *"
-  workflow_dispatch: # 保留這個按鈕，讓你可以隨時在 GitHub 網頁上手動測試
+  workflow_dispatch: # 保留手動觸發按鈕
 
-# 開放權限讓 GitHub Actions 有權限推送到你的 gh-pages 分支
 permissions:
   contents: write
 
 jobs:
-  scrape-and-deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: 1. 取得最新程式碼
+      - name: 1. 檢查原始碼
         uses: actions/checkout@v4
 
       - name: 2. 設定 Python 環境
@@ -23,29 +21,21 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: 3. 安裝依賴套件
+      - name: 3. 安裝必要套件
         run: |
           python -m pip install --upgrade pip
-          # 這裡替換成你實際用到的套件，或使用 pip install -r requirements.txt
-          pip install DrissionPage requests crawl4ai
+          pip install requests beautifulsoup4 urllib3
 
-      - name: 4. 執行爬蟲程式碼
+      - name: 4. 執行全新爬蟲程式
         env:
-          # 將你存在 GitHub Secrets 的 Key 讀入環境變數
-          # 雖然目前是「無 AI 版」可能用不到，但先綁定好未來就不用改 YAML
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
         run: |
-          # 建立一個專屬資料夾，用來存放準備推送到 gh-pages 的靜態檔案
-          mkdir -p public
-          
-          # 執行你的爬蟲
           python scraper.py
 
-      - name: 5. 部署至 gh-pages 分支
+      - name: 5. 部署資料至 gh-pages 分支
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # 這裡非常重要：我們只推送 public 資料夾的內容，避免原始碼被覆蓋
           publish_dir: ./public
-          commit_message: "Auto-update scraped JSON data"
+          commit_message: "Automated data update [skip ci]"
