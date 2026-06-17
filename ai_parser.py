@@ -5,11 +5,13 @@ import re
 import uuid
 import google.generativeai as genai
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 MODEL_NAME = "gemini-1.5-flash"
 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+def init_ai(api_key):
+    if api_key:
+        genai.configure(api_key=api_key)
+        return True
+    return False
 
 def chunk_list(lst, n):
     for i in range(0, len(lst), n):
@@ -90,20 +92,17 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
                     # 【強制 5 個關鍵字邏輯】
                     keywords = data.get("keywords", [])
                     if not isinstance(keywords, list): keywords = []
-                    # 數量不夠用預設詞補滿，數量超過直接切斷，確保絕對是 5 個
                     keywords = (keywords + ["公告", "資訊", "校園", "最新消息", "無"])[:5]
                     data["keywords"] = keywords
 
                     # 【UUID 鎖定與新增邏輯】
                     if link in existing_items:
-                        # 舊公告：強制繼承原本的 UUID
                         data["uuid"] = existing_items[link]["uuid"]
                     else:
-                        # 新公告：配發全新 UUID
                         data["uuid"] = str(uuid.uuid4())
                         new_items_count += 1
                     
-                    # 更新至字典 (以新蓋舊，但 UUID 已經被我們保留了)
+                    # 更新至字典
                     existing_items[link] = data
             except json.JSONDecodeError:
                 pass
@@ -112,49 +111,26 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
     metadata["total_count"] = len(existing_items)
     with open(output_file_path, "w", encoding="utf-8") as f:
         f.write(json.dumps(metadata, ensure_ascii=False) + "\n")
-        # 為了穩定，我們可以依照網址排序寫入
         for link in sorted(existing_items.keys()):
             f.write(json.dumps(existing_items[link], ensure_ascii=False) + "\n")
             
     print(f"   [成功] {site_name} 整理完畢！本次新增 {new_items_count} 筆，目前總計 {len(existing_items)} 筆公告。")
 
-def main():
-    if not GEMINI_API_KEY:
-        print("[警告] 找不到環境變數 GEMINI_API_KEY，略過 AI 處理。")
+def run_parser(site_name, site_html_dir, base_jsonl_dir):
+    html_files = sorted(glob.glob(os.path.join(site_html_dir, "*.html")))
+    
+    if not html_files:
+        print(f"   [提示] 找不到 {site_html_dir}/ 內的 HTML，略過。")
         return
 
-    output_dir = "formatted_jsonl"
-    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(base_jsonl_dir, exist_ok=True)
+    batches = list(chunk_list(html_files, 10))
+    ai_jsonl_chunks = []
     
-    config_files = sorted(glob.glob("configs/web*.json"))
-    for config_file in config_files:
-        with open(config_file, "r", encoding="utf-8") as f:
-            try:
-                config = json.load(f)
-            except:
-                continue
-                
-        site_name = config.get("site_name", "Unknown_Site")
-        print(f"\n[AI 開始處理] 目標任務: {site_name}")
-        
-        # 精準對應 main.py 儲存的路徑
-        site_html_dir = os.path.join("scraped_pages", site_name)
-        html_files = sorted(glob.glob(os.path.join(site_html_dir, "*.html")))
-        
-        if not html_files:
-            print(f"   [提示] 找不到 {site_html_dir}/ 內的 HTML，略過。")
-            continue
+    for index, batch in enumerate(batches, start=1):
+        result = process_html_with_ai(site_name, batch, index)
+        if result:
+            ai_jsonl_chunks.append(result)
 
-        batches = list(chunk_list(html_files, 10))
-        ai_jsonl_chunks = []
-        
-        for index, batch in enumerate(batches, start=1):
-            result = process_html_with_ai(site_name, batch, index)
-            if result:
-                ai_jsonl_chunks.append(result)
-
-        output_file_path = os.path.join(output_dir, f"{site_name}.jsonl")
-        merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path)
-
-if __name__ == "__main__":
-    main()
+    output_file_path = os.path.join(base_jsonl_dir, f"{site_name}.jsonl")
+    merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path)
