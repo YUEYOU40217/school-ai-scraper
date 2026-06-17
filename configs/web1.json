@@ -1,0 +1,6 @@
+{
+    "site_name": "範例靜態網站",
+    "url_pattern": "https://example.com",
+    "rule": "static_html",
+    "description": "直接抓取單一頁面的全量 HTML 原始碼"
+}
