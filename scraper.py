@@ -1,76 +1,63 @@
 import os
 import json
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
-from utils import fetch_page_html, clean_pure_text, match_date_format
+import requests
+import urllib3
 
-def start_scraping():
-    target_url = "https://www.csu.edu.tw/p/403-1000-13-1.php?Lang=zh-tw"
-    html_content = fetch_page_html(target_url)
-    
-    if not html_content:
-        print("無法載入目標網頁，終止執行。")
-        return []
+# 關閉 SSL 憑證警告
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    soup = BeautifulSoup(html_content, "html.parser")
-    announcements = []
-
-    # 抓取頁面中「所有」的 <a> 標籤，不放過任何一個
-    all_anchors = soup.find_all("a")
-    print(f"網頁偵測完成，共發現 {len(all_anchors)} 個原始連結項目。開始全量封裝...")
-
-    for index, anchor in enumerate(all_anchors, start=1):
-        href = anchor.get("href")
-        title = clean_pure_text(anchor.get_text())
-        
-        # 即使沒有網址或沒有文字，也保留這筆資料（確保無損）
-        full_url = urljoin(target_url, href) if href else "NO_HREF"
-
-        # 向上追溯 5 層尋找該區塊的日期
-        date_found = match_date_format(title)
-        if not date_found:
-            parent_node = anchor
-            for _ in range(5):
-                parent_node = parent_node.parent
-                if not parent_node:
-                    break
-                container_text = parent_node.get_text(separator=" ")
-                date_found = match_date_format(container_text)
-                if date_found:
-                    break
-
-        final_date = date_found if date_found else "NO_DATE"
-
-        # 毫無保留，全部打包
-        announcements.append({
-            "index": index,
-            "title": title if title else "EMPTY_TEXT",
-            "href": full_url,
-            "date": final_date
-        })
-
-    return announcements
+def fetch_raw_html(url):
+    """一字不漏地抓取網頁最原始的 HTML 原始碼"""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=15, verify=False)
+        # 自動偵測網頁編碼，防止中文亂碼
+        response.encoding = response.apparent_encoding
+        return response.text
+    except Exception as e:
+        print(f"連線異常: {e}")
+        return None
 
 def main():
-    print("啟動【零篩選・全量網頁內容抓取】管線...")
-    scraped_data = start_scraping()
+    print("啟動【100% 原始碼全量無損抓取】管線...")
+    target_url = "https://www.csu.edu.tw/p/403-1000-13-1.php?Lang=zh-tw"
     
+    # 抓取網頁原始碼（這裡面包含所有的 HTML、JavaScript、CSS、文字）
+    raw_html_content = fetch_raw_html(target_url)
+    
+    if not raw_html_content:
+        print("無法載入目標網頁，終止執行。")
+        return
+
     # 建立符合 GitHub Actions 部署要求的 public 目錄
     output_folder = "public"
     os.makedirs(output_folder, exist_ok=True)
     
-    output_file_path = os.path.join(output_folder, "data.json")
-    
+    # ----------------------------------------------------
+    # 輸出檔案 1：把整個原始碼塞進 JSON 的一個欄位裡
+    # ----------------------------------------------------
+    json_file_path = os.path.join(output_folder, "data.json")
     payload = {
-        "site_name": "正修科技大學全網頁原始連結備份",
-        "total_records": len(scraped_data),
-        "data": scraped_data
+        "site_name": "正修科技大學網頁全量備份",
+        "url": target_url,
+        "full_html_source": raw_html_content  # 整個網頁原始碼都在這個欄位裡
     }
     
-    with open(output_file_path, "w", encoding="utf-8") as json_file:
+    with open(json_file_path, "w", encoding="utf-8") as json_file:
         json.dump(payload, json_file, ensure_ascii=False, indent=4)
         
-    print(f"任務完成。已將 {len(scraped_data)} 筆最原始的網頁資料寫入 {output_file_path}")
+    # ----------------------------------------------------
+    # 輸出檔案 2：直接存成一個標準的 .html 檔案（選備，方便你直接看原始碼）
+    # ----------------------------------------------------
+    html_file_path = os.path.join(output_folder, "source.html")
+    with open(html_file_path, "w", encoding="utf-8") as html_file:
+        html_file.write(raw_html_content)
+        
+    print("任務完成！")
+    print(f"1. 全量 JSON 檔已寫入: {json_file_path}")
+    print(f"2. 原始網頁網頁檔已寫入: {html_file_path}")
 
 if __name__ == "__main__":
     main()
