@@ -1,178 +1,85 @@
-import json
 import os
-import re
-import uuid
-import utils
-from datetime import datetime
-from google import genai
+import json
+from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+from utils import fetch_page_html, clean_pure_text, match_date_format
 
-MAX_RAW_LIMIT = 1000 
-BATCH_SIZE = 20 
-
-def format_json_keywords(json_str):
-    pattern = r'"keywords":\s*\[\s*([^\]]*?)\s*\]'
-    def replace_func(match):
-        items = match.group(1).split('\n')
-        cleaned_items = [item.strip() for item in items if item.strip()]
-        joined_items = "".join(cleaned_items).replace('","', '", "')
-        return f'"keywords": [{joined_items}]'
-    return re.sub(pattern, replace_func, json_str, flags=re.DOTALL)
-
-def clean_and_parse_date(date_str):
-    try:
-        nums = [int(s) for s in re.findall(r'\d+', date_str)]
-        if len(nums) < 3:
-            return datetime(1970, 1, 1)
-        year, month, day = nums[0], nums[1], nums[2]
-        if year < 200:
-            year += 1911
-        return datetime(year, month, day)
-    except:
-        return datetime(1970, 1, 1)
-
-def main():
-    with open("config.json", "r", encoding="utf-8") as f:
-        config = json.load(f)
-
-    print("開始執行爬蟲任務。")
-
-    # 🛠️ 【修改點 1】新增一個字典，用來完整備份歷史 json 中的各校公告資料
-    history_site_backup = {} 
-    existing_uuid_map = {}
-    history_file = "announcements.json"
+def start_scraping():
+    target_url = "https://www.csu.edu.tw/p/403-1000-13-1.php?Lang=zh-tw"
+    html_content = fetch_page_html(target_url)
     
-    if os.path.exists(history_file):
-        try:
-            with open(history_file, "r", encoding="utf-8") as f:
-                history_data = json.load(f)
-                for site_info in history_data:
-                    # 以網站網址當 Key，把整包舊資料暫存起來
-                    if "source_link" in site_info:
-                        history_site_backup[site_info["source_link"]] = site_info
-                        
-                    for item in site_info.get("data", []):
-                        if "link" in item and "uuid" in item:
-                            existing_uuid_map[item["link"]] = item["uuid"]
-            print(f"成功載入歷史資料，共記憶了 {len(existing_uuid_map)} 筆現有的 UUID 對照。")
-        except Exception as e:
-            print(f"讀取歷史 json 失敗或格式不符，將視為全新資料處理。錯誤原因: {e}")
+    if not html_content:
+        print("無法載入目標網頁，終止執行。")
+        return []
 
-    allowed_years = config.get("allowed_years", [2025, 2026])
-    year_keywords = []
-    for y in allowed_years:
-        year_keywords.append(str(y))          
-        year_keywords.append(str(y - 1911))   
-    
-    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-    all_extracted_records = []
+    soup = BeautifulSoup(html_content, "html.parser")
+    announcements = []
+    processed_urls = set()
 
-    for site in config.get("sites", []):
-        target_url = site['url']
-        site_name = site['name']
-        
-        print(f"啟動網站處理: {site_name}")
-        source_name, all_links = utils.fetch_links_smart(target_url)
-        
-        if not all_links:
-            print(f"警告：{site_name} 未能偵測到任何公告，跳過本次抓取。")
+    # 地毯式掃描所有連結標籤
+    for anchor in soup.find_all("a"):
+        href = anchor.get("href")
+        if not href:
             continue
 
-        valid_items = []
-        out_of_range_count = 0 
+        # 補全相對路徑為絕對路徑
+        full_url = urljoin(target_url, href)
+        
+        # 排除非網頁連結與重複連結
+        if not full_url.startswith("http") or full_url in processed_urls:
+            continue
 
-        for item in all_links[:MAX_RAW_LIMIT]:
-            is_valid_year = any(k in item['row_text'] for k in year_keywords)
+        title = clean_pure_text(anchor.get_text())
+        
+        # 過濾明顯屬於網站選單、導覽列的無效文字
+        if len(title) < 4 or any(kw in title.lower() for kw in ["跳到", "首頁", "menu", "login", "english", "search", "交通"]):
+            continue
 
-            if not is_valid_year:
-                out_of_range_count += 1
-                if out_of_range_count >= 3:
-                    print(f"[{site_name}] 偵測到已進入舊年份資料區，停止該網站後續處理。")
+        # 尋找日期：1. 先從標題字串找 2. 找不到則往上遞迴 5 層父節點容器尋找
+        date_found = match_date_format(title)
+        if not date_found:
+            parent_node = anchor
+            for _ in range(5):
+                parent_node = parent_node.parent
+                if not parent_node:
                     break
-                continue
-            
-            out_of_range_count = 0
-            valid_items.append(item)
+                container_text = parent_node.get_text(separator=" ")
+                date_found = match_date_format(container_text)
+                if date_found:
+                    break
 
-        print(f"[{site_name}] 合格公告共 {len(valid_items)} 筆，開始進行每 {BATCH_SIZE} 筆分批打包解析。")
-        
-        for i in range(0, len(valid_items), BATCH_SIZE):
-            batch = valid_items[i : i + BATCH_SIZE]
-            batch_titles = [item['title'] for item in batch]
-            
-            print(f"[{site_name}] 正在發送批次請求 (當前打包共 {len(batch_titles)} 筆)。")
-            batch_ai_results = utils.process_ai_batch(batch_titles, config['prompt_template'], client)
-            
-            for idx, item in enumerate(batch):
-                full_url = urljoin(target_url, item['href'])
-                keywords = ["解析失敗"]
-                if idx < len(batch_ai_results):
-                    keywords = batch_ai_results[idx].get("keywords", ["解析失敗"])
-                
-                all_extracted_records.append({
-                    "source_name": source_name,
-                    "source_link": target_url, # 確保這裡使用 target_url 一致性
-                    "title": item['title'],
-                    "link": full_url,
-                    "keywords": keywords,
-                    "raw_date": item['date'],
-                    "parsed_datetime": clean_and_parse_date(item['date'])
-                })
+        # 若仍無日期，則標記為 UNRESOLVED
+        final_date = date_found if date_found else "UNRESOLVED"
 
-    all_extracted_records.sort(key=lambda x: x['parsed_datetime'], reverse=True)
-
-    site_data_map = {}
-    
-    for rec in all_extracted_records:
-        src_url = rec['source_link']
-        if src_url not in site_data_map:
-            site_data_map[src_url] = {
-                "source_name": rec['source_name'],
-                "source_link": src_url,
-                "data": []
-            }
-        
-        target_link = rec['link']
-        if target_link in existing_uuid_map:
-            assigned_uuid = existing_uuid_map[target_link]
-        else:
-            assigned_uuid = str(uuid.uuid4())
-            existing_uuid_map[target_link] = assigned_uuid
-        
-        site_data_map[src_url]["data"].append({
-            "uuid": assigned_uuid,
-            "title": rec['title'],
-            "link": target_link,
-            "keywords": rec['keywords']
+        announcements.append({
+            "title": title,
+            "href": full_url,
+            "date": final_date
         })
+        processed_urls.add(full_url)
 
-    # 🛠️ 【修改點 2】全新安全防線：比對設定檔，如果某間學校本次抓取失敗（沒出現在 site_data_map 中），就從歷史備份還原
-    for site in config.get("sites", []):
-        target_url = site['url']
-        if target_url not in site_data_map:
-            if target_url in history_site_backup:
-                print(f"🛡️  [安全機制啟動] 偵測到 {site['name']} 本次連線或抓取失敗。已成功從歷史紀錄中還原舊有公告，防止檔案被清空！")
-                site_data_map[target_url] = history_site_backup[target_url]
-            else:
-                print(f"ℹ️  {site['name']} 本次無新資料且歷史無紀錄，略過。")
+    return announcements
 
-    final_output = []
+def main():
+    print("啟動全量無損爬蟲更新管線...")
+    scraped_data = start_scraping()
     
-    for site_info in site_data_map.values():
-        final_output.append({
-            "source_name": site_info["source_name"],
-            "source_link": site_info["source_link"],
-            "total_count": len(site_info["data"]),
-            "data": site_info["data"]
-        })
-
-    raw_json = json.dumps(final_output, ensure_ascii=False, indent=2)
-    final_json = format_json_keywords(raw_json)
-
-    with open("announcements.json", "w", encoding="utf-8") as f:
-        f.write(final_json)
+    # 建立符合 GitHub Actions 部署要求的 public 目錄
+    output_folder = "public"
+    os.makedirs(output_folder, exist_ok=True)
+    
+    output_file_path = os.path.join(output_folder, "data.json")
+    
+    payload = {
+        "site_name": "正修科技大學公告監控",
+        "total_records": len(scraped_data),
+        "data": scraped_data
+    }
+    
+    with open(output_file_path, "w", encoding="utf-8") as json_file:
+        json.dump(payload, json_file, ensure_ascii=False, indent=4)
         
-    print("全部網站處理完畢，已成功更新資料並寫入 announcements.json。")
+    print(f"任務完成。成功將 {len(scraped_data)} 筆全量數據寫入 {output_file_path}")
 
 if __name__ == "__main__":
     main()
