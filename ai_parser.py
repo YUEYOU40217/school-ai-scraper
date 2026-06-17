@@ -3,14 +3,23 @@ import glob
 import json
 import re
 import uuid
-import google.generativeai as genai
+# 核心修正：導入 Google 2026 最新官方 GenAI 套件
+from google import genai
 
-MODEL_NAME = "gemini-1.5-flash"
+# 升級至新版穩定且高性價比的 Flash 模型
+MODEL_NAME = "gemini-3.1-flash-lite"
+ai_client = None
 
 def init_ai(api_key):
+    global ai_client
     if api_key:
-        genai.configure(api_key=api_key)
-        return True
+        try:
+            # 新版 SDK 的 Client 初始化方式
+            ai_client = genai.Client(api_key=api_key)
+            return True
+        except Exception as e:
+            print(f"[錯誤] AI 初始化失敗: {e}")
+            return False
     return False
 
 def chunk_list(lst, n):
@@ -49,9 +58,16 @@ def process_html_with_ai(site_name, html_files, batch_index):
 待處理 HTML：
 {combined_html_content}
 """
+    if not ai_client:
+        print("      [錯誤] AI 用戶端尚未成功初始化。")
+        return None
+
     try:
-        model = genai.GenerativeModel(MODEL_NAME)
-        response = model.generate_content(prompt)
+        # 新版 SDK 的文字生成呼叫語法
+        response = ai_client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt
+        )
         return clean_ai_response(response.text)
     except Exception as e:
         print(f"      [錯誤] 呼叫 Gemini 失敗: {e}")
