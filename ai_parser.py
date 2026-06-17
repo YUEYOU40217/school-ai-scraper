@@ -3,10 +3,10 @@ import glob
 import json
 import re
 import uuid
-# 核心修正：導入 Google 2026 最新官方 GenAI 套件
+# 導入 Google 官方新版 GenAI 套件
 from google import genai
 
-# 升級至新版穩定且高性價比的 Flash 模型
+# 核心修正：指定使用 3.1 Flash-Lite 模型
 MODEL_NAME = "gemini-3.1-flash-lite"
 ai_client = None
 
@@ -63,7 +63,7 @@ def process_html_with_ai(site_name, html_files, batch_index):
         return None
 
     try:
-        # 新版 SDK 的文字生成呼叫語法
+        # 呼叫最新 3.1 模型的文字生成語法
         response = ai_client.models.generate_content(
             model=MODEL_NAME,
             contents=prompt
