@@ -6,7 +6,7 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def fetch_page_html(url):
-    """標準且穩定的網頁請求"""
+    """最穩定的網頁原始 HTML 抓取"""
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
@@ -19,7 +19,7 @@ def fetch_page_html(url):
         return None
 
 def clean_pure_text(text):
-    """清理字串中的換行與多餘空格"""
+    """僅清理空白與換行，保留完整原始文字"""
     if not text:
         return ""
     return re.sub(r'\s+', ' ', text).strip()
