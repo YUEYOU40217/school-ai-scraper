@@ -1,6 +1,17 @@
 {
-    "site_name": "範例靜態網站",
-    "url_pattern": "https://example.com",
-    "rule": "static_html",
-    "description": "直接抓取單一頁面的全量 HTML 原始碼"
+    "site_name": "範例網站_搜尋系統",
+    "url_pattern": "https://example.com/api/data?p={page}", // 目標網址，{page} 會自動替換為當前頁碼
+    "method": "POST", // HTTP 請求方法，若不寫預設為 GET
+    "headers": { // 請求標頭，若不需要特殊身分驗證可刪除此欄位
+        "User-Agent": "Mozilla/5.0",
+        "Authorization": "Bearer YOUR_TOKEN"
+    },
+    "payload": { // 請求攜帶的參數（POST 的 Body 或 GET 的 Query String），若無參數可刪除此欄位
+        "search_key": "關鍵字",
+        "category": "news"
+    },
+    "start_page": 1, // 起始頁碼，若不寫預設為 1
+    "end_page": 10, // 結束頁碼，若不寫預設為 1
+    "delay": 1.0, // 每次請求間隔秒數，若不寫預設為 0.5
+    "description": "這是一個支援POST與自訂Header的通用配置"
 }
