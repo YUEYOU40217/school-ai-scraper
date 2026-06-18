@@ -18,7 +18,7 @@ jobs:
 
       - name: 2. 取得舊資料 (為了保留舊 UUID 與歷史資料)
         run: |
-          git clone --branch gh-pages "https://github.com/${{ github.repository }}.git" gh-pages-data || echo "gh-pages 分支還不存在，略過"
+          git clone --branch gh-pages "[https://github.com/$](https://github.com/$){{ github.repository }}.git" gh-pages-data || echo "gh-pages 分支還不存在，略過"
           if [ -d "gh-pages-data/final_results" ]; then
             cp -r gh-pages-data/final_results ./
           fi
@@ -40,9 +40,10 @@ jobs:
         run: |
           python main.py
 
-      - name: 6. 集中打包發佈資料 (確保分支純淨)
+      - name: 6. 集中打包發佈資料 (建立 .nojekyll 確保 GitHub Pages 正常運作)
         run: |
           mkdir -p deploy_dir
+          touch deploy_dir/.nojekyll
           cp -r crawler_pages deploy_dir/ || true
           cp -r final_results deploy_dir/ || true
 
@@ -51,6 +52,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: ./deploy_dir  # 只推送裝有資料夾的 deploy_dir
-          keep_files: false          # 清理舊檔案，保持乾淨
+          publish_dir: ./deploy_dir  
+          keep_files: false          
           commit_message: "Auto-update: Sync newly scraped results"
