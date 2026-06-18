@@ -80,7 +80,7 @@ def run_spider(config, base_output_dir):
     for page in range(start_page, end_page + 1):
         content = fetch_content(config, page)
         if content:
-            file_path = os.path.join(site_output_dir, f"page_{page}.html")
+            file_path = os.path.join(site_output_dir, f"page_{page：03d}.html")
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(content)
             print(f"      -> 已儲存第 {page} 頁: {file_path}")
