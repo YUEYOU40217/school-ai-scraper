@@ -5,7 +5,7 @@ import re
 import uuid
 from google import genai
 
-# 使用 3.1 Flash-Lite 模型
+# 使用最新且經濟的 3.1 Flash-Lite 模型
 MODEL_NAME = "gemini-3.1-flash-lite"
 ai_client = None
 
@@ -30,7 +30,7 @@ def clean_ai_response(text):
     text = re.sub(r"\n```$", "", text)
     return text.strip()
 
-def process_html_with_ai(site_name, html_files, batch_index):
+def process_html_with_ai(site_name, html_files, batch_index, config_year):
     print(f"      -> 正在請 AI 解析第 {batch_index} 組 ({len(html_files)} 個 HTML 檔案)...")
     
     combined_html_content = ""
@@ -39,7 +39,11 @@ def process_html_with_ai(site_name, html_files, batch_index):
             combined_html_content += f"\n\n--- {os.path.basename(file_path)} ---\n"
             combined_html_content += f.read()
 
-    # 提示詞大幅強化：包含學期轉年份邏輯與強制 5 個關鍵字
+    # 判斷是否由使用者指定了年份，動態調整規則
+    year_instruction = "若公告僅有月、日而缺少年份，請合理推測為當前年份。"
+    if config_year:
+        year_instruction = f"【強制基準年份】：設定檔已指定年份為「{config_year}」，若公告僅有月、日缺少年份，請一律強制補上西元 {config_year} 年！"
+
     prompt = f"""
 你是一個嚴格的網頁資料結構化專家。請將以下 HTML 中的「公告/新聞」提取出來，並「嚴格」遵守 JSONL 格式輸出。
 
@@ -50,13 +54,17 @@ def process_html_with_ai(site_name, html_files, batch_index):
 3. 第二行開始，每一行代表一個公告。UUID 請留空。
 {{"uuid": "", "date": "YYYY-MM-DD", "short_name": "csu", "title": "公告標題", "link": "完整超連結", "keywords": ["字1", "字2", "字3", "字4", "字5"]}}
 
-【重要原則 - 欄位解析】：
-- date (日期): 必須輸出 YYYY-MM-DD 格式。
-  * 【學期轉換年份規則】：-1代表上學期，-2代表下學期。
-    「114-2」或「115-1」請強制轉換為西元年「2026」。
-    「113-2」或「114-1」請強制轉換為西元年「2025」。
-    若是標示純民國年(如113年)，請加1911轉換為西元年。若無年份僅有月日，請推測為當前年份。
-- keywords (關鍵字): 陣列【必須且絕對只能剛好是 5 個元素】。請從公告內文中精粹出最具代表性的五個詞彙。
+【重要原則 - 日期 (date) 欄位解析】：
+- 必須輸出 YYYY-MM-DD 的西元年格式。
+- 【台灣學年度推算公式】：
+  若出現「N學年度-1 (上學期)」，西元年為 N + 1911。
+  若出現「N學年度-2 (下學期)」，西元年為 N + 1911 + 1。
+  (例如：114-1 為 2025 年；114-2 為 2026 年；115-1 為 2026 年)。
+- 若標示純民國年(如113年)，請加1911轉換為西元年。
+- {year_instruction}
+
+【重要原則 - 關鍵字 (keywords) 欄位解析】：
+- 陣列【必須且絕對只能剛好是 5 個元素】。請從公告內文中精粹出最具代表性的五個詞彙。
 - 只提取核心公告，過濾掉選單、導覽列等無關雜訊。
 
 待處理 HTML：
@@ -108,13 +116,13 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
                 elif "link" in data:
                     link = data["link"]
                     
-                    # 【雙重保險】：確保關鍵字絕對是 5 個 (不足會補齊，超過會截斷)
+                    # 雙重保險：確保關鍵字絕對是 5 個
                     keywords = data.get("keywords", [])
                     if not isinstance(keywords, list): keywords = []
                     keywords = (keywords + ["公告", "資訊", "校園", "最新消息", "無"])[:5]
                     data["keywords"] = keywords
 
-                    # 確保有 date 欄位，若 AI 漏掉則給預設值
+                    # 確保有 date 欄位，若 AI 漏掉則給極小值預設值
                     if "date" not in data or not data["date"]:
                         data["date"] = "1970-01-01"
 
@@ -125,7 +133,6 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
                         data["uuid"] = str(uuid.uuid4())
                         new_items_count += 1
                     
-                    # 寫入暫存字典
                     existing_items[link] = data
             except json.JSONDecodeError:
                 pass
@@ -137,15 +144,13 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
     # 4. 寫回 JSONL 檔案
     metadata["total_count"] = len(sorted_items)
     with open(output_file_path, "w", encoding="utf-8") as f:
-        # 第一行寫入 metadata
         f.write(json.dumps(metadata, ensure_ascii=False) + "\n")
-        # 從第二行開始，依序寫入排序好的公告
         for item in sorted_items:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
             
     print(f"   [成功] {site_name} 整理完畢！本次新增 {new_items_count} 筆，目前總計 {len(sorted_items)} 筆公告 (已依日期由新到舊排序)。")
 
-def run_parser(site_name, site_html_dir, base_jsonl_dir):
+def run_parser(site_name, site_html_dir, base_jsonl_dir, config_year=None):
     html_files = sorted(glob.glob(os.path.join(site_html_dir, "*.html")))
     
     if not html_files:
@@ -157,7 +162,7 @@ def run_parser(site_name, site_html_dir, base_jsonl_dir):
     ai_jsonl_chunks = []
     
     for index, batch in enumerate(batches, start=1):
-        result = process_html_with_ai(site_name, batch, index)
+        result = process_html_with_ai(site_name, batch, index, config_year)
         if result:
             ai_jsonl_chunks.append(result)
 
