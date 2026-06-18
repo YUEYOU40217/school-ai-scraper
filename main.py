@@ -8,8 +8,8 @@ def main():
     print("啟動自動化整合引擎...\n")
     
     # 1. 定義明確的資料夾路徑
-    crawler_output_root = "crawler_pages"   # 爬蟲爬完後的暫存資料夾
-    final_results_root = "final_results"     # 最終成果的資料夾
+    crawler_output_root = "crawler_pages"   
+    final_results_root = "final_results"     
     
     # 2. 自動建立暫存與最終成果的根資料夾
     os.makedirs(crawler_output_root, exist_ok=True)
@@ -39,20 +39,24 @@ def main():
                 continue
         
         site_name = config.get("site_name", "Unknown_Site")
+        custom_year = config.get("year")
+        
         print(f"\n{'='*50}")
         print(f"開始處理專案: {site_name}")
+        if custom_year:
+            print(f"[載入設定] 已指定基準年份: {custom_year}")
         print(f"{'='*50}")
 
-        # 【步驟一】執行網頁爬蟲 -> 資料會存到 crawler_pages/網站名稱/ 
+        # 【步驟一】執行網頁爬蟲
         print("\n[功能 1] 執行網頁爬蟲下載...")
         site_html_dir = scraper.run_spider(config, crawler_output_root)
 
-        # 【步驟二】執行 AI 摘要 -> 從 site_html_dir 取資料，結果存到 final_results/
+        # 【步驟二】執行 AI 摘要
         if ai_ready and site_html_dir:
             print("\n[功能 2] 讀取爬蟲資料夾，執行 AI 內容摘要...")
-            ai_parser.run_parser(site_name, site_html_dir, final_results_root)
+            ai_parser.run_parser(site_name, site_html_dir, final_results_root, custom_year)
 
-    print("\n所有 HTML 下載與 AI 摘要任務執行完畢！")
+    print("\n所有任務執行完畢！")
 
 if __name__ == "__main__":
     main()
