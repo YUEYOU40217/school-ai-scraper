@@ -6,5 +6,5 @@
     "method": "GET",
     "headers": "Nope",
     "payload": "Nope",
-    "delay": 1.0,
+    "delay": 1.0
 }
