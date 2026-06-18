@@ -3,10 +3,9 @@ import glob
 import json
 import re
 import uuid
-# 導入 Google 官方新版 GenAI 套件
 from google import genai
 
-# 核心修正：指定使用 3.1 Flash-Lite 模型
+# 使用 3.1 Flash-Lite 模型
 MODEL_NAME = "gemini-3.1-flash-lite"
 ai_client = None
 
@@ -14,7 +13,6 @@ def init_ai(api_key):
     global ai_client
     if api_key:
         try:
-            # 新版 SDK 的 Client 初始化方式
             ai_client = genai.Client(api_key=api_key)
             return True
         except Exception as e:
@@ -41,6 +39,7 @@ def process_html_with_ai(site_name, html_files, batch_index):
             combined_html_content += f"\n\n--- {os.path.basename(file_path)} ---\n"
             combined_html_content += f.read()
 
+    # 提示詞大幅強化：包含學期轉年份邏輯與強制 5 個關鍵字
     prompt = f"""
 你是一個嚴格的網頁資料結構化專家。請將以下 HTML 中的「公告/新聞」提取出來，並「嚴格」遵守 JSONL 格式輸出。
 
@@ -49,11 +48,16 @@ def process_html_with_ai(site_name, html_files, batch_index):
 2. 第一行是來源統計：
 {{"source_name": "{site_name}", "source_link": "該網站網址", "total_count": 0}}
 3. 第二行開始，每一行代表一個公告。UUID 請留空。
-{{"uuid": "", "short_name": "csu", "title": "公告標題", "link": "完整超連結", "keywords": ["字1", "字2", "字3", "字4", "字5"]}}
+{{"uuid": "", "date": "YYYY-MM-DD", "short_name": "csu", "title": "公告標題", "link": "完整超連結", "keywords": ["字1", "字2", "字3", "字4", "字5"]}}
 
-【重要原則】：
-- keywords 陣列【必須剛好是 5 個元素】。
-- 只提取核心公告，過濾掉導覽列等雜訊。
+【重要原則 - 欄位解析】：
+- date (日期): 必須輸出 YYYY-MM-DD 格式。
+  * 【學期轉換年份規則】：-1代表上學期，-2代表下學期。
+    「114-2」或「115-1」請強制轉換為西元年「2026」。
+    「113-2」或「114-1」請強制轉換為西元年「2025」。
+    若是標示純民國年(如113年)，請加1911轉換為西元年。若無年份僅有月日，請推測為當前年份。
+- keywords (關鍵字): 陣列【必須且絕對只能剛好是 5 個元素】。請從公告內文中精粹出最具代表性的五個詞彙。
+- 只提取核心公告，過濾掉選單、導覽列等無關雜訊。
 
 待處理 HTML：
 {combined_html_content}
@@ -63,7 +67,6 @@ def process_html_with_ai(site_name, html_files, batch_index):
         return None
 
     try:
-        # 呼叫最新 3.1 模型的文字生成語法
         response = ai_client.models.generate_content(
             model=MODEL_NAME,
             contents=prompt
@@ -77,7 +80,7 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
     existing_items = {}
     metadata = {"source_name": site_name, "source_link": "", "total_count": 0}
 
-    # 1. 讀取舊資料：用 URL (link) 當作鑰匙，把舊的 UUID 鎖死背起來
+    # 1. 讀取舊資料：保留舊公告的 UUID
     if os.path.exists(output_file_path):
         with open(output_file_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -105,32 +108,42 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
                 elif "link" in data:
                     link = data["link"]
                     
-                    # 【強制 5 個關鍵字邏輯】
+                    # 【雙重保險】：確保關鍵字絕對是 5 個 (不足會補齊，超過會截斷)
                     keywords = data.get("keywords", [])
                     if not isinstance(keywords, list): keywords = []
                     keywords = (keywords + ["公告", "資訊", "校園", "最新消息", "無"])[:5]
                     data["keywords"] = keywords
 
-                    # 【UUID 鎖定與新增邏輯】
+                    # 確保有 date 欄位，若 AI 漏掉則給預設值
+                    if "date" not in data or not data["date"]:
+                        data["date"] = "1970-01-01"
+
+                    # UUID 鎖定與新增邏輯
                     if link in existing_items:
                         data["uuid"] = existing_items[link]["uuid"]
                     else:
                         data["uuid"] = str(uuid.uuid4())
                         new_items_count += 1
                     
-                    # 更新至字典
+                    # 寫入暫存字典
                     existing_items[link] = data
             except json.JSONDecodeError:
                 pass
 
-    # 3. 寫回 JSONL 檔案
-    metadata["total_count"] = len(existing_items)
+    # 3. 將資料轉換為列表並【依日期由大到小排序】
+    sorted_items = list(existing_items.values())
+    sorted_items.sort(key=lambda x: x.get("date", "1970-01-01"), reverse=True)
+
+    # 4. 寫回 JSONL 檔案
+    metadata["total_count"] = len(sorted_items)
     with open(output_file_path, "w", encoding="utf-8") as f:
+        # 第一行寫入 metadata
         f.write(json.dumps(metadata, ensure_ascii=False) + "\n")
-        for link in sorted(existing_items.keys()):
-            f.write(json.dumps(existing_items[link], ensure_ascii=False) + "\n")
+        # 從第二行開始，依序寫入排序好的公告
+        for item in sorted_items:
+            f.write(json.dumps(item, ensure_ascii=False) + "\n")
             
-    print(f"   [成功] {site_name} 整理完畢！本次新增 {new_items_count} 筆，目前總計 {len(existing_items)} 筆公告。")
+    print(f"   [成功] {site_name} 整理完畢！本次新增 {new_items_count} 筆，目前總計 {len(sorted_items)} 筆公告 (已依日期由新到舊排序)。")
 
 def run_parser(site_name, site_html_dir, base_jsonl_dir):
     html_files = sorted(glob.glob(os.path.join(site_html_dir, "*.html")))
