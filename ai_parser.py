@@ -24,15 +24,32 @@ def init_ai(api_key):
 def clean_ai_response(text):
     text = text.strip()
     text = re.sub(r"^```[a-zA-Z]*\n", "", text)
-    text = re.sub(r"\n```$", "", text)
+    text = re.sub(r"\n
+```$", "", text)
     return text.strip()
 
 def clean_url(url):
+    """提取核心網址，確保不受網域或絕對/相對路徑影響"""
     if not url:
         return ""
     url = url.strip()
     match = re.search(r'(/(p|var)/.+)$', url)
     return match.group(1) if match else url
+
+def get_stable_uuid(link, title):
+    """
+    【核心防護】：產生絕對不變的特徵 UUID
+    使用 UUID v5 演算法，只要網址或標題一樣，產生的 UUID 永遠一樣。
+    完全不依賴本地歷史檔案，手動啟動也絕不會變動。
+    """
+    seed = clean_url(link)
+    # 如果沒有網址，或者網址太短失去特徵，就退回使用標題作為種子
+    if not seed or len(seed) < 5:
+        seed = title.strip()
+    
+    # 加上前綴，確保算出來的指紋不會跟其他系統撞號
+    seed = "csu_scraper_" + seed
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
 
 def process_single_html_with_retry(site_name, file_path):
     with open(file_path, "r", encoding="utf-8") as f:
@@ -40,12 +57,11 @@ def process_single_html_with_retry(site_name, file_path):
 
     current_year = datetime.now().year
 
-    # 提示詞升級：增加「逐筆核對，禁止遺漏」的強制命令
     prompt = f"""
 你是一個嚴格的網頁資料結構化專家。請將以下 HTML 中的「公告/新聞」提取出來，並「嚴格」遵守 JSONL 格式輸出。
 
 【最高指導原則】：
-請逐行掃描 HTML 中的表格或清單列表，**絕對不可遺漏任何一筆公告**。該頁面上有幾筆公告，你就必須輸出幾行 JSON！
+請逐行掃描 HTML 中的表格或清單列表，絕對不可遺漏任何一筆公告。該頁面上有幾筆公告，你就必須輸出幾行 JSON！
 
 【嚴格輸出格式要求】：
 1. 絕對不要包含任何 Markdown 標籤。
@@ -93,9 +109,10 @@ def process_single_html_with_retry(site_name, file_path):
     return None
 
 def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
-    existing_items = []
+    existing_items = {}
     metadata = {"source_name": site_name, "source_link": "", "total_count": 0}
 
+    # 1. 讀取舊資料 (用 UUID 當作字典的金鑰)
     if os.path.exists(output_file_path):
         with open(output_file_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -103,12 +120,13 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
                 try:
                     data = json.loads(line)
                     if "link" in data and "uuid" in data:
-                        existing_items.append(data)
+                        existing_items[data["uuid"]] = data
                     elif "source_name" in data:
                         metadata["source_link"] = data.get("source_link", "")
                 except json.JSONDecodeError:
                     pass
 
+    # 2. 處理新抓下來的資料
     for chunk in ai_jsonl_chunks:
         if not chunk: continue
         for line in chunk.split("\n"):
@@ -122,47 +140,47 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
                     new_link = data.get("link", "").strip()
                     new_clean_link = clean_url(new_link)
 
-                    matched_old_item = None
-                    for old_item in existing_items:
+                    # 嘗試從舊檔案找相符的紀錄，以保留你已經存在伺服器上的舊版 uuid4
+                    matched_uuid = None
+                    for old_uuid, old_item in existing_items.items():
                         old_title = old_item.get("title", "").strip()
-                        old_link = old_item.get("link", "").strip()
-                        old_clean_link = clean_url(old_link)
-
-                        # 如果標題一樣，或者是連結且連結不是首頁這種泛用連結
+                        old_clean_link = clean_url(old_item.get("link", ""))
                         if (new_title == old_title) or (new_clean_link and new_clean_link == old_clean_link and len(new_clean_link) > 5):
-                            matched_old_item = old_item
+                            matched_uuid = old_uuid
                             break
 
+                    # 確保關鍵字數量為 5
                     keywords = data.get("keywords", [])
                     if not isinstance(keywords, list): keywords = []
                     keywords = (keywords + ["公告", "資訊", "校園", "最新消息", "無"])[:5]
                     data["keywords"] = keywords
 
-                    if matched_old_item:
-                        data["uuid"] = matched_old_item["uuid"]
-                        if matched_old_item.get("date") and matched_old_item["date"] != "1970-01-01":
-                            data["date"] = matched_old_item["date"]
-                        if matched_old_item.get("keywords"):
-                            data["keywords"] = matched_old_item["keywords"]
+                    if matched_uuid:
+                        # 有歷史檔案：繼承舊 UUID 與舊日期
+                        data["uuid"] = matched_uuid
+                        old_item = existing_items[matched_uuid]
+                        if old_item.get("date") and old_item["date"] != "1970-01-01":
+                            data["date"] = old_item["date"]
+                        if old_item.get("keywords"):
+                            data["keywords"] = old_item["keywords"]
                         data["link"] = new_link
                         data["title"] = new_title
-
-                        for idx, oi in enumerate(existing_items):
-                            if oi["uuid"] == matched_old_item["uuid"]:
-                                existing_items[idx] = data
-                                break
+                        
+                        existing_items[matched_uuid] = data
                     else:
-                        data["uuid"] = str(uuid.uuid4())
+                        # 沒有歷史檔案 (或全新公告)：使用特徵 UUID (絕對不變)
+                        data["uuid"] = get_stable_uuid(new_link, new_title)
+                        
                         if "date" not in data or not data["date"]:
                             data["date"] = "1970-01-01"
-                        existing_items.append(data)
+                            
+                        existing_items[data["uuid"]] = data
+                        
             except json.JSONDecodeError as e:
-                # 錯誤警報開啟：如果 AI 生成的格式有錯，印出來讓我們知道漏了哪一筆！
                 print(f"      [警告] 發現 AI 產生了格式錯誤的 JSON，已跳過該筆: {line[:50]}... (原因: {e})")
 
-    # 安全的去重邏輯：改用 UUID 作為唯一金鑰，不再因為兩個公告連結到同一個附件而誤殺
-    unique_items = {item["uuid"]: item for item in existing_items}
-
+    # 3. 去重與排序
+    unique_items = {item["uuid"]: item for item in existing_items.values()}
     sorted_items = list(unique_items.values())
     sorted_items.sort(key=lambda x: x.get("date", "1970-01-01"), reverse=True)
 
@@ -172,7 +190,7 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
         for item in sorted_items:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
             
-    print(f"   [成功] {site_name} 整合完畢！總計 {len(sorted_items)} 筆公告。")
+    print(f"   [成功] {site_name} 整合完畢！總計 {len(sorted_items)} 筆公告。(已啟用特徵指紋機制)")
 
 def run_parser(site_name, site_html_dir, base_jsonl_dir, config_year=None):
     html_files = sorted(glob.glob(os.path.join(site_html_dir, "*.html")))
