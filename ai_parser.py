@@ -24,8 +24,7 @@ def init_ai(api_key):
 def clean_ai_response(text):
     text = text.strip()
     text = re.sub(r"^```[a-zA-Z]*\n", "", text)
-    text = re.sub(r"\n
-```$", "", text)
+    text = re.sub(r"\n```$", "", text)
     return text.strip()
 
 def clean_url(url):
