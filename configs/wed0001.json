@@ -1,0 +1,10 @@
+{
+    "site_name": "高科大行政公告",
+    "url_pattern": "https://www.nkust.edu.tw/p/403-1000-15-{page}.php?Lang=zh-tw",
+    "start_page": 1,
+    "end_page": 5,
+    "method": "GET",
+    "headers": "Nope",
+    "payload": "Nope",
+    "delay": 1.5
+}
