@@ -1,6 +1,6 @@
 {
     "site_name": "高科大最新消息",
-    "url_pattern": "https://www.nkust.edu.tw/p/403-1000-12-{page}.php?Lang=zh-tw",
+    "url_pattern": "https://www.nkust.edu.tw/p/422-1000-1001.php?Lang=zh-tw",
     "start_page": 1,
     "end_page": 1,
     "method": "GET",
