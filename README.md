@@ -1,45 +1,54 @@
-# 學校公告自動化摘要 (School AI Scraper)
+---
 
-本專案透過 GitHub Actions 定時自動爬取學校官網公告，搭配 Scraper API 突破校園防火牆限制，並利用 Gemini AI 批次進行智慧摘要。最終將整理好的資料生成一個持續更新的 `announcements.json` API，方便後續直接串接個人網頁或 LINE 機器人。 (⌐■_■)
+# 學校公告自動化小幫手 (School AI Scraper) (✧∇✧)
+
+這是一個全自動的小機器人！它會定時去學校官網幫你把最新公告抓下來，並用 AI 整理得乾乾淨淨。弄好之後，你就有一個隨時更新的專屬資料庫，可以直接串接給你的 LINE 機器人或網頁囉！ (≧▽≦)
 
 ---
 
-## 使用者自行設定指南
+## 設定指南(⌐■_■)✨
 
-如果你是初次部署，請至專案的 **Settings** (設定) 完成以下四個步驟，系統就會開始全自動運作：
+跟著以下四個步驟點一點，系統就會開始自動幫你工作啦 (ง •_•)ง：
 
-### 1. 開啟 Actions 寫入權限
+### 1. 打開機器人寫入權限
 
-* **路徑**：Settings -> Actions -> General
-* **設定**：滑到最底部的 Workflow permissions，選取 **Read and write permissions** 並存檔。（確保機器人能自動將爬取的資料推送到專案內）
+* **去哪裡找**：專案上方的 `Settings` -> 左邊選單找 `Actions` -> `General`
+* **做什麼事**：滑到最下面的 Workflow permissions，選中 **`Read and write permissions`**，然後按下 Save。
 
-### 2. 填寫 API 金鑰 (Secrets)
+### 2. 貼上你的專屬金鑰
 
-* **路徑**：Settings -> Secrets and variables -> Actions
-* **設定**：點擊 **New repository secret**，分別新增以下兩把金鑰：
-* `GEMINI_API_KEY`：你的 Google Gemini 授權碼。
-* `SCRAPER_API_KEY`：你的 Scraper API 跳板授權碼。
+* **去哪裡找**：`Settings` -> `Secrets and variables` -> `Actions`
+* **做什麼事**：點擊綠色的 **`New repository secret`** 按鈕，分別新增這兩把鑰匙：
+* `GEMINI_API_KEY`：填入你的 Google Gemini API 密碼。
+* `SCRAPER_API_KEY`：填入你的 Scraper API 密碼。
 
 
 
-### 3. 啟動 GitHub Pages 網址
+### 3. 啟動資料發佈網址
 
-* **路徑**：Settings -> Pages
-* **設定**：Source 選擇 **Deploy from a branch**，Branch 選擇 **gh-pages** 分支，資料夾選擇 `/ (root)` 並存檔。（設定完成後，你就會獲得一個公開且自動更新的 JSON 連結）
+* **去哪裡找**：`Settings` -> 左邊選單找 `Pages`
+* **做什麼事**：
+* Source 選單拉開，選 **`Deploy from a branch`**。
+* Branch 下方選 **`gh-pages`** 分支，旁邊保持 `/ (root)`，然後按下 Save。
+* (設定完稍微等個一兩分鐘，你的專屬 JSONL 資料網址就會正式上線囉！╰( º∀º )╯)
 
-### 4. 自訂你要爬的學校目標
 
-直接打開專案目錄下的 `config.json`，填入你想抓取的年份限制與學校網址即可：
+
+### 4. 設定你要抓哪一個公告頁面
+
+* **去哪裡找**：直接去專案裡的 `configs/` 資料夾，打開或新增設定檔（例如 `web0001.json`）。
+* **做什麼事**：照著格式填入你要抓的「網站名稱」跟「網址」就好，例如這樣：
 
 ```json
 {
-  "allowed_years": [2025, 2026],
-  "sites": [
-    {
-      "name": "學校名稱",
-      "url": "你想抓取的公告網址"
-    }
-  ]
+    "site_name": "高科大最新消息",
+    "url_pattern": "貼上你要抓的學校純淨列表網址",
+    "start_page": 1,
+    "end_page": 1,
+    "method": "GET",
+    "headers": "Nope",
+    "payload": "Nope",
+    "delay": 1.5
 }
 
 ```
