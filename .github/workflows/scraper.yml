@@ -46,6 +46,7 @@ jobs:
           touch deploy_dir/.nojekyll
           cp -r crawler_pages deploy_dir/ || true
           cp -r final_results deploy_dir/ || true
+          cp README.md deploy_dir/ || true
 
       - name: 7. 部署純資料至 gh-pages 分支
         uses: peaceiris/actions-gh-pages@v4
