@@ -43,7 +43,6 @@ jobs:
       - name: 6. 集中打包發佈資料 (建立 .nojekyll 確保 GitHub Pages 正常運作)
         run: |
           mkdir -p deploy_dir
-          touch deploy_dir/.nojekyll
           cp -r crawler_pages deploy_dir/ || true
           cp -r final_results deploy_dir/ || true
           cp README.md deploy_dir/ || true
