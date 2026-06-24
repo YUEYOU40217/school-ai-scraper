@@ -56,6 +56,7 @@ def process_single_html_with_retry(site_name, file_path):
 
     current_year = datetime.now().year
 
+    # 提示詞升級：加入讓 AI 判斷 short_name 的邏輯
     prompt = f"""
 你是一個嚴格的網頁資料結構化專家。請將以下 HTML 中的「公告/新聞」提取出來，並「嚴格」遵守 JSONL 格式輸出。
 
@@ -67,17 +68,15 @@ def process_single_html_with_retry(site_name, file_path):
 2. 第一行是來源統計：
 {{"source_name": "{site_name}", "source_link": "該網站網址", "total_count": 0}}
 3. 第二行開始，每一行代表一個公告。UUID 請留空。請特別注意標題內的雙引號 (") 必須使用反斜線跳脫 (\\")，以免破壞 JSON 格式！
-{{"uuid": "", "date": "YYYY-MM-DD", "short_name": "csu", "title": "公告標題", "link": "完整超連結", "keywords": ["字1", "字2", "字3", "字4", "字5"]}}
+{{"uuid": "", "date": "YYYY-MM-DD", "short_name": "學校縮寫", "title": "公告標題", "link": "完整超連結", "keywords": ["字1", "字2", "字3", "字4", "字5"]}}
 
-【重要原則 - 日期 (date) 欄位解析】：
-- 必須輸出 YYYY-MM-DD 的西元年格式。
-- 若公告僅有月、日而缺少年份，請一律推測為當前西元年份：【 {current_year} 】年。
+【重要原則 - 欄位解析】：
+- short_name：絕對不可以無腦照抄範例！請從該公告的「超連結網址」中自動擷取學校的英文縮寫（例如網址包含 csu.edu.tw 就填 "csu"，包含 nkust.edu.tw 就填 "nkust"）。
+- date：必須輸出 YYYY-MM-DD 的西元年格式。若僅有月日而缺少年份，預設為【 {current_year} 】年。
+- keywords：陣列【必須且絕對只能剛好是 5 個元素】。
 - 【台灣年份與學期對照表 (嚴格遵守，禁止自行計算)】：
   若為純民國年：112年=2023年，113年=2024年，114年=2025年，115年=2026年，116年=2027年。
   若為學年度：113-1=2024, 113-2=2025, 114-1=2025, 114-2=2026, 115-1=2026, 115-2=2027。
-
-【重要原則 - 關鍵字 (keywords) 欄位解析】：
-- 陣列【必須且絕對只能剛好是 5 個元素】。
 
 待處理 HTML：
 --- {os.path.basename(file_path)} ---
