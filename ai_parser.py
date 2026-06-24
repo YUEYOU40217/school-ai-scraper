@@ -97,12 +97,15 @@ def process_single_html_with_retry(site_name, file_path):
             )
             return clean_ai_response(response.text)
         except Exception as e:
-            if "429" in str(e) or "ResourceExhausted" in str(e):
-                wait_time = 12 * (attempt + 1)
-                print(f"      [觸發限流] API 達到每分鐘上限，暫停 {wait_time} 秒後重試...")
+            error_msg = str(e)
+            # 將 503 (伺服器過載) 和 500 內部錯誤也納入自動重試機制
+            if "429" in error_msg or "ResourceExhausted" in error_msg or "503" in error_msg or "500" in error_msg:
+                wait_time = 15 * (attempt + 1)  # 稍微拉長等待時間，給伺服器喘息空間
+                print(f"      [伺服器忙碌/限流] 暫停 {wait_time} 秒後進行第 {attempt + 1} 次重試... (代碼: {error_msg[:15]}...)")
                 time.sleep(wait_time)
             else:
-                print(f"      [錯誤] 呼叫 Gemini 失敗: {e}")
+                # 只有遇到真正無法解決的錯誤才放棄
+                print(f"      [錯誤] 呼叫 Gemini 發生未知失敗: {e}")
                 return None
     return None
 
