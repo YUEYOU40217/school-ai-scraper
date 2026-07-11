@@ -24,14 +24,13 @@ def send_message(webhook_url, site_name, item):
     title = item.get("title", "無標題公告")
     link = item.get("link", "")
     date = item.get("date", "未知日期")
-    keywords = item.get("keywords", [])
     short_name = item.get("short_name", "校園")
     
-    keywords_str = "、".join(keywords) if keywords else "無"
-    description_text = f"**【關鍵字】** {keywords_str}\n\n **發布日期：** {date}"
+    # 移除關鍵字，僅保留發布日期
+    description_text = f"📅 **發布日期：** {date}"
     
     payload = {
-        "content": f"：嗚、嗚、嗚、嗚！**{site_name} ({short_name}) 有新公告吱！**！！",
+        "content": f"🐵：嗚、嗚、嗚、嗚！**{site_name} ({short_name}) 有新公告吱！**！！",
         "embeds": [
             {
                 "title": title,
@@ -47,10 +46,11 @@ def send_message(webhook_url, site_name, item):
         if response.status_code == 204:
             return True
         else:
-            print(f"      [通知失敗] Discord 回傳代碼: {response.status_code}")
+            # 加入 title 與 link，方便你抓出是哪一條導致 400 錯誤
+            print(f"      [通知失敗] Discord 回傳代碼: {response.status_code} | 失敗公告: {title} | 網址: {link}")
             return False
     except Exception as e:
-        print(f"      [錯誤] Webhook 連線異常: {e}")
+        print(f"      [錯誤] Webhook 連線異常: {e} | 失敗公告: {title}")
         return False
 
 def run_notifier(jsonl_dir, history_dir):
