@@ -36,19 +36,20 @@
 
 ### 4. 設定你要抓哪一個公告頁面
 
-* **去哪裡找**：直接去專案裡的 `configs/` 資料夾，打開或新增設定檔（例如 `web0001.json`）。
-* **做什麼事**：照著格式填入你要抓的「網站名稱」跟「網址」就好，例如這樣：
+* **去哪裡找**：直接去專案裡的 `configs/` 資料夾，打開或新增設定檔（例如 `web1.json`）。
+* **做什麼事**：照著多工任務格式填入「學校名稱」，並在 `tasks` 陣列裡設定你要抓的處室公告，例如這樣：
 
 ```json
 {
     "site_name": "高科大最新消息",
-    "url_pattern": "貼上你要抓的學校純淨列表網址",
-    "start_page": 1,
-    "end_page": 1,
     "method": "GET",
-    "headers": "Nope",
-    "payload": "Nope",
-    "delay": 1.5
+    "delay": 1.5,
+    "tasks": [
+        {
+            "category": "最新消息",
+            "url_pattern": "[https://www.nkust.edu.tw/p/422-1000-1001-](https://www.nkust.edu.tw/p/422-1000-1001-){page}.php?Lang=zh-tw",
+            "start_page": 1,
+            "end_page": 5
+        }
+    ]
 }
-
-```
