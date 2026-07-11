@@ -37,6 +37,8 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+          WEBHOOK_CSU: ${{ secrets.WEBHOOK_CSU }}
+          WEBHOOK_NKUST: ${{ secrets.WEBHOOK_NKUST }}
         run: |
           python main.py
 
