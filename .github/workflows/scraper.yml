@@ -22,6 +22,9 @@ jobs:
           if [ -d "gh-pages-data/final_results" ]; then
             cp -r gh-pages-data/final_results ./
           fi
+          if [ -d "gh-pages-data/discord_history" ]; then
+            cp -r gh-pages-data/discord_history ./  # <--- 還有這裡！
+          fi
 
       - name: 3. 設定 Python 環境
         uses: actions/setup-python@v5
@@ -47,6 +50,7 @@ jobs:
           mkdir -p deploy_dir
           cp -r crawler_pages deploy_dir/ || true
           cp -r final_results deploy_dir/ || true
+          cp -r discord_history deploy_dir/ || true
           cp README.md deploy_dir/ || true
 
       - name: 7. 部署純資料至 gh-pages 分支
