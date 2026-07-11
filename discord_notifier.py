@@ -27,7 +27,7 @@ def send_message(webhook_url, site_name, item):
     short_name = item.get("short_name", "校園")
     
     # 純粹負責排版，不干涉資料內容
-    description_text = f" **/n發布日期：** {date}"
+    description_text = f"\n\n **發布日期：** {date}"
     
     payload = {
         "content": f"：嗚、嗚、嗚、嗚！**{site_name} ({short_name}) 有新公告吱！**！！",
