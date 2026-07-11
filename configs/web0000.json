@@ -1,10 +1,19 @@
 {
-    "site_name": "正修全部公告",
-    "url_pattern": "https://www.csu.edu.tw/p/403-1000-13-{page}.php?Lang=zh-tw",
-    "start_page": 1,
-    "end_page": 5,
+    "site_name": "正修科技大學",
     "method": "GET",
-    "headers": "Nope",
-    "payload": "Nope",
-    "delay": 1.0
+    "delay": 1.0,
+    "tasks": [
+        {
+            "category": "全部公告",
+            "url_pattern": "https://www.csu.edu.tw/p/403-1000-13-{page}.php?Lang=zh-tw",
+            "start_page": 1,
+            "end_page": 5
+        },
+        {
+            "category": "教務公告",
+            "url_pattern": "https://www.csu.edu.tw/p/403-1000-14-{page}.php?Lang=zh-tw",
+            "start_page": 1,
+            "end_page": 3
+        }
+    ]
 }
