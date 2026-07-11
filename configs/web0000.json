@@ -4,16 +4,22 @@
     "delay": 1.0,
     "tasks": [
         {
-            "category": "全部公告",
-            "url_pattern": "https://www.csu.edu.tw/p/403-1000-13-{page}.php?Lang=zh-tw",
+            "category": "學務處公告",
+            "url_pattern": "https://osa.csu.edu.tw/p/403-1069-195-{page}.php?Lang=zh-tw",
             "start_page": 1,
             "end_page": 5
         },
         {
-            "category": "教務公告",
-            "url_pattern": "https://www.csu.edu.tw/p/403-1000-14-{page}.php?Lang=zh-tw",
+            "category": "總務處公告",
+            "url_pattern": "https://general.csu.edu.tw/p/403-1070-418-{page}.php?Lang=zh-tw",
             "start_page": 1,
-            "end_page": 3
+            "end_page": 5
+        },
+        {
+            "category": "教務處公告",
+            "url_pattern": "https://academic.csu.edu.tw/p/403-1007-48-{page}.php?Lang=zh-tw",
+            "start_page": 1,
+            "end_page": 5
         }
     ]
 }
