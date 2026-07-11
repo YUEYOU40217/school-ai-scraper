@@ -10,6 +10,12 @@ from google import genai
 MODEL_NAME = "gemini-3.1-flash-lite"
 ai_client = None
 
+# 【新增】學校網域對照表：專門用來修復相對路徑
+DOMAIN_MAP = {
+    "正修科技大學": "https://www.csu.edu.tw",
+    "國立高雄科技大學": "https://www.nkust.edu.tw"
+}
+
 def init_ai(api_key):
     global ai_client
     if api_key:
@@ -28,25 +34,36 @@ def clean_ai_response(text):
     return text.strip()
 
 def clean_url(url):
-    """提取核心網址，確保不受網域或絕對/相對路徑影響"""
     if not url:
         return ""
     url = url.strip()
     match = re.search(r'(/(p|var)/.+)$', url)
     return match.group(1) if match else url
 
+def sanitize_link(raw_link, site_name):
+    """【核心淨水器】過濾空白字元並將相對路徑轉換為絕對網址"""
+    if not raw_link:
+        return ""
+        
+    # 1. 殺死所有空白與錯誤編碼
+    clean_link = raw_link.strip().replace(" ", "").replace("%20", "")
+    
+    # 2. 如果已經是完整網址，直接回傳
+    if clean_link.startswith("http"):
+        return clean_link
+        
+    # 3. 處理相對路徑，根據學校名稱補上對應網域
+    base_domain = DOMAIN_MAP.get(site_name, "https://")
+    if clean_link.startswith("/"):
+        return base_domain + clean_link
+    else:
+        return base_domain + "/" + clean_link
+
 def get_stable_uuid(link, title):
-    """
-    【核心防護】：產生絕對不變的特徵 UUID
-    使用 UUID v5 演算法，只要網址或標題一樣，產生的 UUID 永遠一樣。
-    完全不依賴本地歷史檔案，手動啟動也絕不會變動。
-    """
     seed = clean_url(link)
-    # 如果沒有網址，或者網址太短失去特徵，就退回使用標題作為種子
     if not seed or len(seed) < 5:
         seed = title.strip()
     
-    # 加上前綴，確保算出來的指紋不會跟其他系統撞號
     seed = "csu_scraper_" + seed
     return str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
 
@@ -56,7 +73,6 @@ def process_single_html_with_retry(site_name, file_path):
 
     current_year = datetime.now().year
 
-    # 提示詞升級：加入讓 AI 判斷 short_name 的邏輯
     prompt = f"""
 你是一個嚴格的網頁資料結構化專家。請將以下 HTML 中的「公告/新聞」提取出來，並「嚴格」遵守 JSONL 格式輸出。
 
@@ -71,7 +87,7 @@ def process_single_html_with_retry(site_name, file_path):
 {{"uuid": "", "date": "YYYY-MM-DD", "short_name": "學校縮寫", "title": "公告標題", "link": "完整超連結", "keywords": ["字1", "字2", "字3", "字4", "字5"]}}
 
 【重要原則 - 欄位解析】：
-- short_name：絕對不可以無腦照抄範例！請從該公告的「超連結網址」中自動擷取學校的英文縮寫（例如網址包含 csu.edu.tw 就填 "csu"，包含 nkust.edu.tw 就填 "nkust"）。
+- short_name：請從該公告的「超連結網址」中自動擷取學校的英文縮寫（例如包含 csu.edu.tw 就填 "csu"）。
 - date：必須輸出 YYYY-MM-DD 的西元年格式。若僅有月日而缺少年份，預設為【 {current_year} 】年。
 - keywords：陣列【必須且絕對只能剛好是 5 個元素】。
 - 【台灣年份與學期對照表 (嚴格遵守，禁止自行計算)】：
@@ -98,13 +114,11 @@ def process_single_html_with_retry(site_name, file_path):
             return clean_ai_response(response.text)
         except Exception as e:
             error_msg = str(e)
-            # 將 503 (伺服器過載) 和 500 內部錯誤也納入自動重試機制
             if "429" in error_msg or "ResourceExhausted" in error_msg or "503" in error_msg or "500" in error_msg:
-                wait_time = 15 * (attempt + 1)  # 稍微拉長等待時間，給伺服器喘息空間
-                print(f"      [伺服器忙碌/限流] 暫停 {wait_time} 秒後進行第 {attempt + 1} 次重試... (代碼: {error_msg[:15]}...)")
+                wait_time = 15 * (attempt + 1)
+                print(f"      [伺服器忙碌/限流] 暫停 {wait_time} 秒後進行第 {attempt + 1} 次重試...")
                 time.sleep(wait_time)
             else:
-                # 只有遇到真正無法解決的錯誤才放棄
                 print(f"      [錯誤] 呼叫 Gemini 發生未知失敗: {e}")
                 return None
     return None
@@ -113,7 +127,6 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
     existing_items = {}
     metadata = {"source_name": site_name, "source_link": "", "total_count": 0}
 
-    # 1. 讀取舊資料 (用 UUID 當作字典的金鑰)
     if os.path.exists(output_file_path):
         with open(output_file_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -127,7 +140,6 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
                 except json.JSONDecodeError:
                     pass
 
-    # 2. 處理新抓下來的資料
     for chunk in ai_jsonl_chunks:
         if not chunk: continue
         for line in chunk.split("\n"):
@@ -138,10 +150,13 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
                     metadata["source_link"] = data.get("source_link", "")
                 elif "link" in data:
                     new_title = data.get("title", "").strip()
-                    new_link = data.get("link", "").strip()
+                    
+                    # 【核心應用】在這裡對 AI 吐出來的網址進行清洗與絕對路徑轉換
+                    raw_link = data.get("link", "").strip()
+                    new_link = sanitize_link(raw_link, site_name)
+                    
                     new_clean_link = clean_url(new_link)
 
-                    # 嘗試從舊檔案找相符的紀錄，以保留你已經存在伺服器上的舊版 uuid4
                     matched_uuid = None
                     for old_uuid, old_item in existing_items.items():
                         old_title = old_item.get("title", "").strip()
@@ -150,37 +165,35 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
                             matched_uuid = old_uuid
                             break
 
-                    # 確保關鍵字數量為 5
                     keywords = data.get("keywords", [])
                     if not isinstance(keywords, list): keywords = []
                     keywords = (keywords + ["公告", "資訊", "校園", "最新消息", "無"])[:5]
                     data["keywords"] = keywords
 
                     if matched_uuid:
-                        # 有歷史檔案：繼承舊 UUID 與舊日期
                         data["uuid"] = matched_uuid
                         old_item = existing_items[matched_uuid]
                         if old_item.get("date") and old_item["date"] != "1970-01-01":
                             data["date"] = old_item["date"]
                         if old_item.get("keywords"):
                             data["keywords"] = old_item["keywords"]
+                            
+                        # 強制將舊資料的髒網址覆蓋為乾淨的網址
                         data["link"] = new_link
                         data["title"] = new_title
                         
                         existing_items[matched_uuid] = data
                     else:
-                        # 沒有歷史檔案 (或全新公告)：使用特徵 UUID (絕對不變)
                         data["uuid"] = get_stable_uuid(new_link, new_title)
-                        
                         if "date" not in data or not data["date"]:
                             data["date"] = "1970-01-01"
                             
+                        data["link"] = new_link
                         existing_items[data["uuid"]] = data
                         
             except json.JSONDecodeError as e:
-                print(f"      [警告] 發現 AI 產生了格式錯誤的 JSON，已跳過該筆: {line[:50]}... (原因: {e})")
+                print(f"      [警告] 發現 AI 產生了格式錯誤的 JSON，已跳過該筆: {line[:50]}...")
 
-    # 3. 去重與排序
     unique_items = {item["uuid"]: item for item in existing_items.values()}
     sorted_items = list(unique_items.values())
     sorted_items.sort(key=lambda x: x.get("date", "1970-01-01"), reverse=True)
@@ -191,7 +204,7 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
         for item in sorted_items:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
             
-    print(f"   [成功] {site_name} 整合完畢！總計 {len(sorted_items)} 筆公告。(已啟用特徵指紋機制)")
+    print(f"   [成功] {site_name} 整合完畢！總計 {len(sorted_items)} 筆公告。")
 
 def run_parser(site_name, site_html_dir, base_jsonl_dir, config_year=None):
     html_files = sorted(glob.glob(os.path.join(site_html_dir, "*.html")))
