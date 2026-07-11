@@ -9,11 +9,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # 核心修改：從環境變數讀取爬蟲專用 API Key
 SCRAPER_API_KEY = os.environ.get("SCRAPER_API_KEY")
 
-def fetch_content(config, page=None):
-    url = config.get("url_pattern")
-    if page and "{page}" in url:
-        url = url.replace("{page}", str(page))
-    
+def fetch_content(url, config):
     raw_headers = config.get("headers")
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"} if (raw_headers == "Nope" or not raw_headers) else raw_headers
 
@@ -25,31 +21,23 @@ def fetch_content(config, page=None):
     
     # -------------------------------------------------------------
     # 【API Key 整合邏輯】
-    # 根據你使用的爬蟲/代理服務類型，取消下方其中一種常見做法的註解：
     # -------------------------------------------------------------
     if SCRAPER_API_KEY:
-        # 作法 A：如果是當作 Header 傳送（例如：自訂 API、Crawlbase 等）
+        # 作法 A：如果是當作 Header 傳送
         # headers["X-Scraper-API-Key"] = SCRAPER_API_KEY
         # headers["Authorization"] = f"Bearer {SCRAPER_API_KEY}"
         
-        # 作法 B：如果是串接轉發代理服務（例如：ScraperAPI）
-        # 需要將目標網址當作參數傳給代理伺服器
+        # 作法 B：如果是串接轉發代理服務
         # proxy_params = {"api_key": SCRAPER_API_KEY, "url": url}
         # if method == "GET":
         #     payload.update(proxy_params)
-        #     # 此時連線目標會變成代理伺服器的 URL，這裡僅作示意
-        #     # url = "http://api.scraperapi.com" 
         
         # 作法 C：直接附加在網址後方作為 Query String
         # if "?" in url:
         #     url = f"{url}&apikey={SCRAPER_API_KEY}"
         # else:
         #     url = f"{url}?apikey={SCRAPER_API_KEY}"
-        
-        # 提示：目前預設僅作 Log 顯示，確認有成功讀取
-        print(f"      [資訊] 已載入 SCRAPER_API_KEY (長度: {len(SCRAPER_API_KEY)})")
-    else:
-        print("      [提示] 未偵測到 SCRAPER_API_KEY，將使用常規 IP 直接連線。")
+        pass # （保留你的 API 判斷邏輯，為了避免每頁都印出提示，這裡預設 pass）
     # -------------------------------------------------------------
 
     try:
@@ -72,18 +60,40 @@ def run_spider(config, base_output_dir):
     os.makedirs(site_output_dir, exist_ok=True)
     print(f"目標網站: {site_name} -> 存檔位置: {site_output_dir}/")
     
-    start_page = config.get("start_page", 1)
-    end_page = config.get("end_page", 1)
+    # 讀取全域設定
     raw_delay = config.get("delay")
     delay = 0.5 if (raw_delay == "Nope" or raw_delay is None) else float(raw_delay)
     
-    for page in range(start_page, end_page + 1):
-        content = fetch_content(config, page)
-        if content:
-            file_path = os.path.join(site_output_dir, f"page_{page:04d}.html")
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(content)
-            print(f"      -> 已儲存第 {page} 頁: {file_path}")
-        time.sleep(delay)
+    # 讀取任務清單
+    tasks = config.get("tasks", [])
+    if not tasks:
+        print("      [警告] 設定檔中找不到 tasks 清單，請確認 JSON 格式。")
+        return site_output_dir
+
+    # 迴圈處理每一個公告分類
+    for task in tasks:
+        category = task.get("category", "未分類")
+        url_pattern = task.get("url_pattern")
+        start_page = task.get("start_page", 1)
+        end_page = task.get("end_page", 1)
         
+        print(f"   -> 開始抓取類別: {category}")
+        
+        for page in range(start_page, end_page + 1):
+            # 組合目標網址
+            if url_pattern and "{page}" in url_pattern:
+                url = url_pattern.replace("{page}", str(page))
+            else:
+                url = url_pattern
+                
+            content = fetch_content(url, config)
+            if content:
+                # 檔名前方加上 category，避免不同公告的相同頁碼互相覆蓋
+                file_path = os.path.join(site_output_dir, f"{category}_page_{page:04d}.html")
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                print(f"      -> 已儲存 {category} 第 {page} 頁: {file_path}")
+            
+            time.sleep(delay)
+            
     return site_output_dir
