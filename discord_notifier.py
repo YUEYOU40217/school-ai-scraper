@@ -26,11 +26,11 @@ def send_message(webhook_url, site_name, item):
     date = item.get("date", "未知日期")
     short_name = item.get("short_name", "校園")
     
-    # 移除關鍵字，僅保留發布日期
-    description_text = f"📅 **發布日期：** {date}"
+    # 純粹負責排版，不干涉資料內容
+    description_text = f" **/n發布日期：** {date}"
     
     payload = {
-        "content": f"🐵：嗚、嗚、嗚、嗚！**{site_name} ({short_name}) 有新公告吱！**！！",
+        "content": f"：嗚、嗚、嗚、嗚！**{site_name} ({short_name}) 有新公告吱！**！！",
         "embeds": [
             {
                 "title": title,
@@ -46,7 +46,6 @@ def send_message(webhook_url, site_name, item):
         if response.status_code == 204:
             return True
         else:
-            # 加入 title 與 link，方便你抓出是哪一條導致 400 錯誤
             print(f"      [通知失敗] Discord 回傳代碼: {response.status_code} | 失敗公告: {title} | 網址: {link}")
             return False
     except Exception as e:
@@ -103,6 +102,7 @@ def run_notifier(jsonl_dir, history_dir):
                     date_val = data.get("date", "")
                     uuid_val = data.get("uuid", "")
                     
+                    # 嚴格過濾時間
                     if not date_val or date_val < "2026-01-01":
                         continue
                     
@@ -114,6 +114,7 @@ def run_notifier(jsonl_dir, history_dir):
                 except json.JSONDecodeError:
                     pass
         
+        # 由舊到新排序確保時間軸合理
         pending_announcements.sort(key=lambda x: x[1].get("date", "2026-01-01"))
         
         for combo_key, data in pending_announcements:
@@ -123,6 +124,7 @@ def run_notifier(jsonl_dir, history_dir):
                 new_sent_count += 1
                 time.sleep(1.5)
 
+        # 覆蓋寫入最新的對照表
         with open(history_file, "w", encoding="utf-8") as f:
             json.dump(sorted(list(sent_set)), f, ensure_ascii=False, indent=4)
             
