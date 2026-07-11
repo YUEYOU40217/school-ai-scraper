@@ -4,6 +4,7 @@ import json
 import re
 import scraper
 import ai_parser
+import discord_notifier
 
 def get_config_number(filename):
     # 確保 web1, web2, ..., web10 依數字大小排序
@@ -37,6 +38,8 @@ def main():
 
         if ai_ready and site_html_dir:
             ai_parser.run_parser(site_name, site_html_dir, final_results_root, custom_year)
+            
+    discord_notifier.run_notifier(final_results_root)
 
 if __name__ == "__main__":
     main()
