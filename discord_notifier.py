@@ -28,10 +28,10 @@ def send_message(webhook_url, site_name, item):
     short_name = item.get("short_name", "校園")
     
     keywords_str = "、".join(keywords) if keywords else "無"
-    description_text = f"**【關鍵字】** {keywords_str}\n\n📅 **發布日期：** {date}"
+    description_text = f"**【關鍵字】** {keywords_str}\n\n **發布日期：** {date}"
     
     payload = {
-        "content": f"🐵：嗚、嗚、嗚、嗚！**{site_name} ({short_name}) 有新公告吱！**！！",
+        "content": f"：嗚、嗚、嗚、嗚！**{site_name} ({short_name}) 有新公告吱！**！！",
         "embeds": [
             {
                 "title": title,
