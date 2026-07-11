@@ -4,22 +4,47 @@ import glob
 import time
 import requests
 
+def get_embed_color(link):
+    """根據網址特徵動態判斷處室，並回傳對應的十進位顏色代碼"""
+    if not link:
+        return 3447003  # 預設藍色
+        
+    link_lower = link.lower()
+    
+    # 依網址內包含的處室關鍵字進行顏色分流
+    if "osa.csu.edu.tw" in link_lower:
+        return 15105570  # 學務處：亮橘色 (#E67E22)
+    elif "general.csu.edu.tw" in link_lower:
+        return 3066993   # 總務處：翠綠色 (#2ECC71)
+    elif "academic.csu.edu.tw" in link_lower:
+        return 10181046  # 教務處：魅惑紫 (#9B59B6)
+    elif "nkust.edu.tw" in link_lower:
+        return 15158332  # 高科大最新消息：烈焰紅 (#E74C3C)
+        
+    return 3447003      # 正修全部公告 / 其他預設：經典藍 (#3498DB)
+
 def send_message(webhook_url, site_name, item):
     """將單筆公告轉換為 Discord Embed 格式並發送"""
     title = item.get("title", "無標題公告")
     link = item.get("link", "")
     date = item.get("date", "未知日期")
-    short_name = item.get("short_name", "校園")
+    keywords = item.get("keywords", [])
     
-    # 組合 Discord Embed 規格
+    # 格式化關鍵字陣列為字串
+    keywords_str = ", ".join(keywords) if keywords else "無"
+    
+    # 動態獲取該處室對應的顏色
+    embed_color = get_embed_color(link)
+    
+    # 組合 Discord 訊息內容
     payload = {
-        "content": f"📢 **{site_name} ({short_name}) 有新公告囉！**",
+        "content": "🐵：嗚、嗚、嗚、嗚！!!新消息！！",
         "embeds": [
             {
                 "title": title,
                 "url": link,
-                "description": f"發布日期：{date}",
-                "color": 3447003  # 側邊條顏色（十進位藍色）
+                "description": f"發布日期：{date}\n關鍵字：{keywords_str}",
+                "color": embed_color  # 使用動態分配的顏色
             }
         ]
     }
@@ -38,65 +63,73 @@ def send_message(webhook_url, site_name, item):
 
 def run_notifier(jsonl_dir):
     print("\n==================================================")
-    print("啟動 Discord 智慧分流推播引擎...")
+    print("啟動 Discord 推播引擎...")
     print("==================================================")
     
-    # 對應表：左邊的名稱必須與 configs 內設定的 site_name（即產出的 jsonl 檔名）完全一致
     webhook_map = {
         "正修科技大學": os.environ.get("WEBHOOK_CSU"),
         "國立高雄科技大學": os.environ.get("WEBHOOK_NKUST"),
-        # 未來有新學校，直接在下方依樣畫葫蘆增加即可
-        # "學校名稱": os.environ.get("環境變數名稱")
     }
 
-    # 讀取推播歷史紀錄，避免重複發送
+    # 讀取推播歷史紀錄檔（uuid_date 組合）
     history_file = os.path.join(jsonl_dir, "discord_history.json")
-    sent_uuids = []
+    sent_combos = []
     if os.path.exists(history_file):
         try:
             with open(history_file, "r", encoding="utf-8") as f:
-                sent_uuids = json.load(f)
+                sent_combos = json.load(f)
         except json.JSONDecodeError:
             pass
             
-    sent_set = set(sent_uuids)
+    sent_set = set(sent_combos)
     new_sent_count = 0
     
-    # 掃描 final_results 內所有的 jsonl 檔案
     jsonl_files = glob.glob(os.path.join(jsonl_dir, "*.jsonl"))
     for file_path in jsonl_files:
-        # 從檔名還原學校名稱（例如："正修科技大學.jsonl" -> "正修科技大學"）
         site_name = os.path.basename(file_path).replace(".jsonl", "")
         print(f"   -> 正在檢查: {site_name}")
         
-        # 取得該學校對應的 Webhook 網址
         webhook_url = webhook_map.get(site_name)
         if not webhook_url:
             print(f"      [提示] 找不到 {site_name} 對應的 Webhook 網址，跳過推播。")
             continue
+        
+        pending_announcements = []
         
         with open(file_path, "r", encoding="utf-8") as f:
             for line in f:
                 if not line.strip(): continue
                 try:
                     data = json.loads(line)
-                    # 跳過第一行的 metadata 統計資料
                     if "total_count" in data: continue
                     
-                    uuid_val = data.get("uuid")
-                    # 如果這筆公告的 UUID 沒發送過，就進行推播
-                    if uuid_val and uuid_val not in sent_set:
-                        success = send_message(webhook_url, site_name, data)
-                        if success:
-                            sent_set.add(uuid_val)
-                            new_sent_count += 1
-                            # 稍作延遲，避免觸發 Discord 速率限制
-                            time.sleep(1.5)
-                            
+                    date_val = data.get("date", "")
+                    uuid_val = data.get("uuid", "")
+                    
+                    # 1. 嚴格過濾：只保留 2026 年（含）之後的公告
+                    if not date_val or date_val < "2026-01-01":
+                        continue
+                    
+                    # 2. 建立 UUID 與日期的唯一識別組合
+                    combo_key = f"{uuid_val}_{date_val}"
+                    
+                    if combo_key not in sent_set:
+                        pending_announcements.append((combo_key, data))
+                        
                 except json.JSONDecodeError:
                     pass
+        
+        # 3. 將待發送清單依日期由舊到新排序
+        pending_announcements.sort(key=lambda x: x[1].get("date", "2026-01-01"))
+        
+        # 4. 依序執行推播發送
+        for combo_key, data in pending_announcements:
+            success = send_message(webhook_url, site_name, data)
+            if success:
+                sent_set.add(combo_key)
+                new_sent_count += 1
+                time.sleep(1.5)
 
-    # 如果有新發送的公告，更新歷史紀錄檔
     if new_sent_count > 0:
         with open(history_file, "w", encoding="utf-8") as f:
             json.dump(list(sent_set), f, ensure_ascii=False)
