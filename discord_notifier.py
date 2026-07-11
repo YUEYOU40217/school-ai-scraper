@@ -28,7 +28,7 @@ def send_message(webhook_url, site_name, item):
     short_name = item.get("short_name", "校園")
     
     keywords_str = "、".join(keywords) if keywords else "無"
-    description_text = f"**【關鍵字】** {keywords_str}\n\n **發布日期：** {date}"
+    description_text = f"**【關鍵字】** {keywords_str}\n\n📅 **發布日期：** {date}"
     
     payload = {
         "content": f"🐵：嗚、嗚、嗚、嗚！**{site_name} ({short_name}) 有新公告吱！**！！",
@@ -45,7 +45,6 @@ def send_message(webhook_url, site_name, item):
     try:
         response = requests.post(webhook_url, json=payload, timeout=10)
         if response.status_code == 204:
-            print(f"      [通知成功] 已推播: {title}")
             return True
         else:
             print(f"      [通知失敗] Discord 回傳代碼: {response.status_code}")
@@ -77,11 +76,16 @@ def run_notifier(jsonl_dir, history_dir):
             continue
             
         history_file = os.path.join(history_dir, f"{site_name}_history.json")
+        
         sent_combos = []
         if os.path.exists(history_file):
             try:
                 with open(history_file, "r", encoding="utf-8") as f:
-                    sent_combos = json.load(f)
+                    data_loaded = json.load(f)
+                    if isinstance(data_loaded, dict):
+                        sent_combos = list(data_loaded.keys())
+                    elif isinstance(data_loaded, list):
+                        sent_combos = data_loaded
             except json.JSONDecodeError:
                 pass
                 
@@ -119,9 +123,10 @@ def run_notifier(jsonl_dir, history_dir):
                 new_sent_count += 1
                 time.sleep(1.5)
 
+        with open(history_file, "w", encoding="utf-8") as f:
+            json.dump(sorted(list(sent_set)), f, ensure_ascii=False, indent=4)
+            
         if new_sent_count > 0:
-            with open(history_file, "w", encoding="utf-8") as f:
-                json.dump(list(sent_set), f, ensure_ascii=False)
-            print(f"   [完成] {site_name} 共推送 {new_sent_count} 則新公告，已更新對照表。")
+            print(f"   [完成] {site_name} 共推送 {new_sent_count} 則新公告，對照表已更新。")
         else:
             print(f"   [完成] {site_name} 目前沒有新公告。")
