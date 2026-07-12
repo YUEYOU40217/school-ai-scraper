@@ -18,12 +18,15 @@ jobs:
 
       - name: 2. 取得舊資料 (為了保留舊 UUID 與歷史資料)
         run: |
-          git clone --branch gh-pages "[https://github.com/$](https://github.com/$){{ github.repository }}.git" gh-pages-data || echo "gh-pages 分支還不存在，略過"
+          git clone --branch gh-pages "https://github.com/${{ github.repository }}.git" gh-pages-data || echo "gh-pages 分支還不存在，略過"
+          
+          mkdir -p final_results discord_history
+          
           if [ -d "gh-pages-data/final_results" ]; then
-            cp -r gh-pages-data/final_results ./
+            cp -r gh-pages-data/final_results/* ./final_results/ || true
           fi
           if [ -d "gh-pages-data/discord_history" ]; then
-            cp -r gh-pages-data/discord_history ./  # <--- 還有這裡！
+            cp -r gh-pages-data/discord_history/* ./discord_history/ || true
           fi
 
       - name: 3. 設定 Python 環境
