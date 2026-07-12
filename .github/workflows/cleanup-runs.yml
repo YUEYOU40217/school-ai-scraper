@@ -18,5 +18,5 @@ jobs:
         with:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
-          retain_days: 7         # 只保留最近 7 天的紀錄
-          keep_minimum_runs: 3   # 最少保留 3 筆紀錄
+          retain_days: 7         
+          keep_minimum_runs: 10   
