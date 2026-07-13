@@ -7,24 +7,24 @@
             "category": "行政公告",
             "url_pattern": "https://www.nkust.edu.tw/p/422-1000-1000-{page}.php?Lang=zh-tw",
             "start_page": 1,
-            "end_page": 5
+            "end_page": 3
         },
         {
             "category": "最新消息",
             "url_pattern": "https://www.nkust.edu.tw/p/422-1000-1001-{page}.php?Lang=zh-tw",
             "start_page": 1,
-            "end_page": 5
+            "end_page": 3
         },
         {
             "category": "學術公告",
             "url_pattern": "https://www.nkust.edu.tw/p/422-1000-1002-{page}.php?Lang=zh-tw",
             "start_page": 1,
-            "end_page": 5
+            "end_page": 3
         },{
             "category": "活動訊息",
             "url_pattern": "https://www.nkust.edu.tw/p/422-1000-1003-{page}.php?Lang=zh-tw",
             "start_page": 1,
-            "end_page": 5
+            "end_page": 3
         }
     ]
 }
