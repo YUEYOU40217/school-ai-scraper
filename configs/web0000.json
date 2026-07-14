@@ -3,6 +3,12 @@
     "method": "GET",
     "delay": 1.0,
     "tasks": [
+{
+            "category": "學務處",
+            "url_pattern": "https://osa.csu.edu.tw",
+            "start_page": 1,
+            "end_page": 1
+        },
         {
             "category": "首頁全部公告",
             "url_pattern": "https://www.csu.edu.tw/p/403-1000-13-{page}.php?Lang=zh-tw",
