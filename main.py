@@ -1,14 +1,7 @@
 import os
-import glob
-import json
-import re
 import scraper
 import ai_parser
 import discord_notifier
-
-def get_config_number(filename):
-    match = re.search(r'web(\d+)\.json', filename)
-    return int(match.group(1)) if match else 0
 
 def main():
     print("啟動自動化整合引擎...\n")
@@ -23,21 +16,16 @@ def main():
     api_key = os.environ.get("GEMINI_API_KEY")
     ai_ready = ai_parser.init_ai(api_key)
 
-    config_files = sorted(glob.glob("configs/web*.json"), key=get_config_number)
-    
-    for config_file in config_files:
-        with open(config_file, "r", encoding="utf-8") as f:
-            config = json.load(f)
-        
-        site_name = config.get("site_name", "Unknown_Site")
-        custom_year = config.get("year")
-        
-        print(f"\n{'='*50}\n處理: {site_name} (年份: {custom_year})\n{'='*50}")
-        site_html_dir = scraper.run_spider(config, crawler_output_root)
+    print("【第一階段】執行分散式爬蟲...")
+    scraped_sites = scraper.run_all_spiders(crawler_output_root)
 
-        if ai_ready and site_html_dir:
-            ai_parser.run_parser(site_name, site_html_dir, final_results_root, custom_year)
+    if ai_ready and scraped_sites:
+        print("【第二階段】執行 AI 智慧摘要...")
+        for site_name in scraped_sites:
+            site_html_dir = os.path.join(crawler_output_root, site_name)
+            ai_parser.run_parser(site_name, site_html_dir, final_results_root, "2026") # 年份可視需求調整
 
+    print("【第三階段】執行 Discord 推播...")
     discord_notifier.run_notifier(final_results_root, discord_history_root)
 
 if __name__ == "__main__":
