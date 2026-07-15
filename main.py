@@ -10,20 +10,20 @@ def main():
     final_results_root = "final_results"
     discord_history_root = "discord_history"
     
-    os.makedirs(crawler_output_root, exist_ok=True)
     os.makedirs(final_results_root, exist_ok=True)
     
     api_key = os.environ.get("GEMINI_API_KEY")
     ai_ready = ai_parser.init_ai(api_key)
 
     print("【第一階段】執行分散式爬蟲...")
+    
     scraped_sites = scraper.run_all_spiders(crawler_output_root)
 
     if ai_ready and scraped_sites:
         print("【第二階段】執行 AI 智慧摘要...")
         for site_name in scraped_sites:
             site_html_dir = os.path.join(crawler_output_root, site_name)
-            ai_parser.run_parser(site_name, site_html_dir, final_results_root, "2026") # 年份可視需求調整
+            ai_parser.run_parser(site_name, site_html_dir, final_results_root, "2026")
 
     print("【第三階段】執行 Discord 推播...")
     discord_notifier.run_notifier(final_results_root, discord_history_root)
