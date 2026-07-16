@@ -4,7 +4,7 @@ import time
 def run(site_output_dir, fetch_content):
     os.makedirs(site_output_dir, exist_ok=True)
     
-    category = "首頁全部公告"
+    category = "全部公告"
     delay = 1.0
     
     # 只抓列表頁的第 1 到 3 頁
