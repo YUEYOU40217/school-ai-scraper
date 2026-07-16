@@ -9,7 +9,7 @@ def run(site_output_dir, fetch_content):
     
     # 只抓列表頁的第 1 到 3 頁
     for page in range(1, 4):
-        target_url = f"https://www.csu.edu.tw/p/403-1000-13-{page}.php?Lang=zh-tw"
+        target_url = f"https://general.csu.edu.tw/p/403-1070-418-{page}.php?Lang=zh-tw"
         print(f"      [{category}] 開始抓取列表第 {page} 頁: {target_url}")
         
         # 直接抓取列表頁的 HTML
