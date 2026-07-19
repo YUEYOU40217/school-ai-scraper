@@ -1,90 +1,65 @@
-import os
+import requests
 import time
-import re
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
 
-def run(site_output_dir, fetch_content):
-    os.makedirs(site_output_dir, exist_ok=True)
+# 請替換成你實際抓取的學務處公告列表 URL 結構
+# 假設網址結尾是用 page=1, page=2 來換頁
+base_url = "https://www.csu.edu.tw/bulletin?page=" 
+
+headers = {
+    # 加上 User-Agent 避免被阻擋
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
+# 設定爬取 1 到 3 頁
+for page in range(1, 4):
+    url = f"{base_url}{page}"
+    print(f"正在抓取第 {page} 頁列表...")
     
-    category = "學務處公告"
-    delay = 1.0 
-    
-    for page in range(1, 4):
-        list_url = f"https://osa.csu.edu.tw/p/403-1069-195-{page}.php?Lang=zh-tw"
-        print(f"      [{category}] 開始抓取列表第 {page} 頁: {list_url}")
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
         
-        list_html = fetch_content(list_url)
-        if not list_html: 
-            continue
+        # 取得完整的三頁 HTML 原始碼
+        raw_html = response.text
         
-        soup = BeautifulSoup(list_html, "html.parser")
-        links = soup.select(".mtitle a")
-        
-        if not links:
-            break
+        # 直接將完整的 HTML 寫入檔案，方便你後續檢查 DOM 結構
+        file_name = f"list_page_{page}.html"
+        with open(file_name, "w", encoding="utf-8") as f:
+            f.write(raw_html)
+        print(f"已儲存: {file_name}")
 
-        # ==================================================
-        # 建立輕量化 HTML 模板開頭
-        # ==================================================
-        mini_html_content = f"<html><body>\n"
+        # =====================================================================
+        # 以下為原本「點進去找日期與整理資料」的邏輯，先全部註解掉
+        # =====================================================================
+        
+        # soup = BeautifulSoup(raw_html, "html.parser")
+        # articles = soup.find_all("div", class_="announcement-item") # 假設的 class
+        # 
+        # for article in articles:
+        #     # 1. 抓取標題與連結
+        #     title = article.find("a").text
+        #     inner_url = article.find("a")["href"]
+        #     
+        #     # 2. 點進內頁找日期 (原本會觸發防呆機制的源頭)
+        #     inner_response = requests.get(inner_url, headers=headers)
+        #     inner_soup = BeautifulSoup(inner_response.text, "html.parser")
+        #     
+        #     # 策略 A 與 策略 B 的日期尋找邏輯
+        #     date = extract_date_from_inner_page(inner_soup) 
+        #     
+        #     # 3. 整理資料
+        #     data_list.append({
+        #         "title": title,
+        #         "date": date,
+        #         "url": inner_url
+        #     })
+        
+        # =====================================================================
 
-        for idx, link in enumerate(links):
-            href = link.get("href")
-            # 從列表頁直接抓標題
-            title = link.get("title") or link.get_text(strip=True)
-            
-            if not href: 
-                continue
-            
-            inner_url = urljoin(list_url, href)
-            print(f"         -> 深入內頁尋找日期 ({idx+1}/{len(links)}): {inner_url}")
-            
-            inner_html = fetch_content(inner_url)
-            date_str = ""
-            
-            if inner_html:
-                inner_soup = BeautifulSoup(inner_html, "html.parser")
-                
-                # 策略 A：尋找 RulingDigital 系統常見的日期標籤
-                date_tag = inner_soup.find(class_=re.compile(r'mdate|date', re.I))
-                if date_tag:
-                    date_str = date_tag.get_text(strip=True)
-                else:
-                    # 策略 B：用正則表達式暴力搜尋 YYYY-MM-DD 或 YYYY/MM/DD
-                    match = re.search(r'(202\d[-/]\d{2}[-/]\d{2})', inner_soup.get_text())
-                    if match:
-                        date_str = match.group(1)
-            
-            # 防呆：如果真的找不到日期，給個預設格式避免 AI 崩潰
-            if not date_str:
-                date_str = "2026-01-01" 
-            
-            # ==================================================
-            # 按照你設計的完美結構，把這篇公告塞進輕量化 HTML 中
-            # ==================================================
-            mini_html_content += f"""
-            <div class="mbox">
-                <div class="d-txt">
-                    <div class="mtitle">
-                        <i class="mdate before">{date_str}</i>
-                        <a href="{inner_url}" title="{title}">
-                            {title}
-                        </a>
-                    </div>
-                </div>
-            </div>
-            """
-            time.sleep(delay)
-            
-        # 補上 HTML 結尾
-        mini_html_content += "</body></html>"
-        
-        # 存檔：把剛才組合好的「完美結構」寫入單一檔案
-        filename = f"{category}_p{page}_lite.html"
-        file_path = os.path.join(site_output_dir, filename)
-        
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(mini_html_content)
-        
-        print(f"         -> [成功存檔] {filename} (已完成 Token 輕量化壓縮)")
+        # 避免請求過於頻繁，設定 1 秒延遲
+        time.sleep(1)
+
+    except requests.exceptions.RequestException as e:
+        print(f"第 {page} 頁抓取失敗: {e}")
+
+print("前 3 頁 HTML 原始碼抓取完畢！")
