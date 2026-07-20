@@ -1,5 +1,6 @@
 import os
 import time
+import re  # 新增引入正則表達式模組
 from bs4 import BeautifulSoup
 
 def run(site_output_dir, fetch_content):
@@ -13,7 +14,6 @@ def run(site_output_dir, fetch_content):
         list_url = f"https://osa.csu.edu.tw/p/403-1069-195-{page}.php?Lang=zh-tw"
         print(f"      [{category}] 開始抓取列表第 {page} 頁: {list_url}")
         
-        # 使用引擎提供的 fetch_content 抓取列表頁 HTML
         list_html = fetch_content(list_url)
         
         if not list_html:
@@ -38,25 +38,33 @@ def run(site_output_dir, fetch_content):
             if link.startswith("/"):
                 link = "https://osa.csu.edu.tw" + link
             
-            # 過濾器：判斷是否為學務處內容 (osa.csu.edu.tw)
+            # 過濾器：判斷是否為學務處內容
             if "osa.csu.edu.tw" in link:
                 try:
-                    # 進入內頁抓取，使用引擎的 fetch_content
                     inner_html = fetch_content(link)
                     if inner_html:
                         inner_soup = BeautifulSoup(inner_html, "html.parser")
-                        date_tag = inner_soup.find("i", class_="mdate")
+                        
+                        # 改良版日期抓取邏輯
+                        # 1. 尋找任何帶有 mdate class 的標籤
+                        date_tag = inner_soup.find(class_="mdate")
                         if date_tag:
-                            date = date_tag.text.strip()
+                            # 清除可能多餘的文字，如 "發布日期："
+                            date = date_tag.text.replace("發布日期", "").replace(":", "").replace("：", "").strip()
+                        
+                        # 2. 如果還是找不到 (或抓出來是空的)，使用正則表達式在網頁文字中硬搜
+                        if date == "N/A" or not date:
+                            match = re.search(r'(20\d{2}[-/]\d{2}[-/]\d{2})', inner_soup.text)
+                            if match:
+                                date = match.group(1)
+                                
                 except Exception as e:
                     print(f"         -> [連線內頁失敗] {link}")
                 
-                # 點擊內頁後設定小延遲，避免伺服器阻擋
                 time.sleep(0.5)
             else:
                 print(f"         -> [跳過外部連結] {title}")
             
-            # 將資料組裝成你要求的 DIV 結構
             html_block = f"""
 <div class="mbox">
     <div class="d-txt">
@@ -70,7 +78,6 @@ def run(site_output_dir, fetch_content):
 </div>"""
             page_output_html += html_block + "\n"
         
-        # 爬蟲親自負責命名與存檔，每一頁獨立存成一個檔案
         if page_output_html:
             filename = f"{category}_p{page}.html"
             file_path = os.path.join(site_output_dir, filename)
@@ -80,5 +87,4 @@ def run(site_output_dir, fetch_content):
             
             print(f"         -> [成功存檔] {filename}")
             
-        # 換下一頁前設定延遲
         time.sleep(delay)
