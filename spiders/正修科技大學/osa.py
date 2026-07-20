@@ -1,41 +1,80 @@
-import os
+import requests
+from bs4 import BeautifulSoup
 import time
 
-def run(site_output_dir, fetch_content):
-    os.makedirs(site_output_dir, exist_ok=True)
-    
-    delay = 1.0
-    
-    # 將你要抓取的兩個網址與對應的檔名寫成清單
-    targets = [
-        {
-            "filename": "學務處首頁.html",
-            "url": "https://osa.csu.edu.tw/"
-        },
-        {
-            "filename": "學務處公告_p1.html",
-            "url": "https://osa.csu.edu.tw/p/403-1069-195-1.php?Lang=zh-tw"
-        }
-    ]
-    
-    for target in targets:
-        url = target["url"]
-        filename = target["filename"]
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
+# 準備要輸出的檔案
+output_filename = "csu_announcements_ai_format.html"
+
+with open(output_filename, "w", encoding="utf-8") as f:
+    # 針對第 1 到第 3 頁進行迴圈爬取
+    for page in range(1, 4):
+        list_url = f"https://osa.csu.edu.tw/p/403-1069-195-{page}.php?Lang=zh-tw"
+        print(f"正在抓取第 {page} 頁列表...")
         
-        print(f"      開始抓取: {url}")
-        
-        # 呼叫你原本的 fetch_content 函數來取得 HTML
-        html_content = fetch_content(url)
-        
-        # 爬蟲負責命名與存檔
-        if html_content:
-            file_path = os.path.join(site_output_dir, filename)
+        try:
+            response = requests.get(list_url, headers=headers, timeout=10)
+            soup = BeautifulSoup(response.text, "html.parser")
             
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(html_content)
+            # 找到清單中所有的公告區塊
+            articles = soup.find_all("div", class_="mtitle")
             
-            print(f"         -> [成功存檔] {filename}")
-        else:
-            print(f"         -> [抓取失敗] fetch_content 未回傳內容 ({filename})")
+            for article in articles:
+                a_tag = article.find("a")
+                if not a_tag:
+                    continue
+                    
+                title = a_tag.text.strip()
+                link = a_tag.get("href")
                 
-        time.sleep(delay)
+                # 初始化預設值
+                date = "N/A"
+                
+                # 處理相對路徑
+                if link.startswith("/"):
+                    link = "https://osa.csu.edu.tw" + link
+                
+                # 過濾器：判斷是否為學務處內容 (osa.csu.edu.tw)
+                if "osa.csu.edu.tw" in link:
+                    try:
+                        inner_resp = requests.get(link, headers=headers, timeout=10)
+                        inner_soup = BeautifulSoup(inner_resp.text, "html.parser")
+                        
+                        # 在內頁尋找日期
+                        date_tag = inner_soup.find("i", class_="mdate")
+                        if date_tag:
+                            date = date_tag.text.strip()
+                            
+                    except Exception as e:
+                        print(f"    [連線內頁失敗] {link}")
+                    
+                    # 點擊內頁後設定延遲，避免伺服器阻擋
+                    time.sleep(0.5)
+                else:
+                    print(f"    [跳過外部連結] {title}")
+                
+                # 將資料組裝成你要求的 DIV 結構
+                html_block = f"""
+<div class="mbox">
+    <div class="d-txt">
+        <div class="mtitle">
+            <i class="mdate before">{date} </i>
+            <a href="{link}" title="{title}">
+                {title}
+            </a>
+        </div>
+    </div>
+</div>"""
+                # 寫入檔案
+                f.write(html_block + "\n")
+                
+        except Exception as e:
+            print(f"第 {page} 頁抓取失敗: {e}")
+            
+        # 換下一頁前設定延遲
+        time.sleep(1)
+
+print(f"\n抓取完畢！已將格式化內容儲存於: {output_filename}")
