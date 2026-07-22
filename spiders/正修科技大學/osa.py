@@ -1,6 +1,6 @@
 import os
 import time
-import re  # 新增引入正則表達式模組
+import re  
 from bs4 import BeautifulSoup
 
 def run(site_output_dir, fetch_content):
@@ -32,39 +32,41 @@ def run(site_output_dir, fetch_content):
                 
             title = a_tag.text.strip()
             link = a_tag.get("href")
-            date = "N/A"
+            date = "Nope"
             
             # 處理相對路徑
             if link.startswith("/"):
                 link = "https://osa.csu.edu.tw" + link
             
-            # 過濾器：判斷是否為學務處內容
-            if "osa.csu.edu.tw" in link:
-                try:
-                    inner_html = fetch_content(link)
-                    if inner_html:
-                        inner_soup = BeautifulSoup(inner_html, "html.parser")
-                        
-                        # 改良版日期抓取邏輯
-                        # 1. 尋找任何帶有 mdate class 的標籤
-                        date_tag = inner_soup.find(class_="mdate")
-                        if date_tag:
-                            # 清除可能多餘的文字，如 "發布日期："
-                            date = date_tag.text.replace("發布日期", "").replace(":", "").replace("：", "").strip()
-                        
-                        # 2. 如果還是找不到 (或抓出來是空的)，使用正則表達式在網頁文字中硬搜
-                        if date == "N/A" or not date:
-                            match = re.search(r'(20\d{2}[-/]\d{2}[-/]\d{2})', inner_soup.text)
-                            if match:
-                                date = match.group(1)
-                                
-                except Exception as e:
-                    print(f"         -> [連線內頁失敗] {link}")
-                
-                time.sleep(0.5)
-            else:
-                print(f"         -> [跳過外部連結] {title}")
+            # 移除網域過濾，所有的連結都會嘗試去抓取內頁的時間
+            try:
+                inner_html = fetch_content(link)
+                if inner_html:
+                    inner_soup = BeautifulSoup(inner_html, "html.parser")
+                    
+                    # 1. 尋找任何帶有 mdate class 的標籤
+                    date_tag = inner_soup.find(class_="mdate")
+                    if date_tag:
+                        # 清除可能多餘的文字
+                        date = date_tag.text.replace("發布日期", "").replace(":", "").replace("：", "").strip()
+                    
+                    # 2. 如果還是找不到 (或抓出來是空的)，使用正則表達式在網頁文字中硬搜
+                    if date == "Nope" or not date:
+                        match = re.search(r'(20\d{2}[-/]\d{2}[-/]\d{2})', inner_soup.text)
+                        if match:
+                            date = match.group(1)
+                            
+            except Exception as e:
+                # 遇到外部網站阻擋連線或發生錯誤時，直接印出提示，但不中斷
+                print(f"         -> [連線內頁失敗或外部連結] {link}")
             
+            time.sleep(0.5)
+            
+            # 雙重保險，萬一前面的處理結果變成空字串，強制補回 "Nope"
+            if not date:
+                date = "Nope"
+            
+            # 所有的公告最後都會跑到這裡被組裝起來
             html_block = f"""
 <div class="mbox">
     <div class="d-txt">
@@ -78,6 +80,7 @@ def run(site_output_dir, fetch_content):
 </div>"""
             page_output_html += html_block + "\n"
         
+        # 存檔邏輯
         if page_output_html:
             filename = f"{category}_p{page}.html"
             file_path = os.path.join(site_output_dir, filename)
