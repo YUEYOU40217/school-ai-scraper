@@ -3,6 +3,7 @@ import json
 import glob
 import time
 import requests
+from datetime import datetime
 
 def get_embed_color(link):
     if not link:
@@ -20,14 +21,14 @@ def get_embed_color(link):
         
     return 3447003
 
-def send_message(webhook_url, site_name, item):
+# 新增 display_date 參數，用來決定畫面上要顯示的日期
+def send_message(webhook_url, site_name, item, display_date):
     title = item.get("title", "無標題公告")
     link = item.get("link", "")
-    date = item.get("date", "未知日期")
     short_name = item.get("short_name", "校園")
     
-    # 純粹負責排版，不干涉資料內容
-    description_text = f"\n\n **發布日期：** {date}"
+    # 使用傳入的 display_date 排版
+    description_text = f"\n\n **發布日期：** {display_date}"
     
     payload = {
         "content": f"：嗚、嗚、嗚、嗚！**{site_name} ({short_name}) 有新公告吱！**！！",
@@ -58,6 +59,7 @@ def run_notifier(jsonl_dir, history_dir):
     print("==================================================")
     
     os.makedirs(history_dir, exist_ok=True)
+    today_date = datetime.now().strftime("%Y-%m-%d")
     
     webhook_map = {
         "正修科技大學": os.environ.get("WEBHOOK_CSU"),
@@ -76,6 +78,7 @@ def run_notifier(jsonl_dir, history_dir):
             
         history_file = os.path.join(history_dir, f"{site_name}_history.json")
         
+        # 1. 讀取歷史檔案的原始字串列表
         sent_combos = []
         if os.path.exists(history_file):
             try:
@@ -88,9 +91,11 @@ def run_notifier(jsonl_dir, history_dir):
             except json.JSONDecodeError:
                 pass
                 
-        sent_set = set(sent_combos)
+        # 2. 建立「基礎對照集合」：把 # 後面的發現時間切掉，只留 {uuid}_{date} 用來比對
+        # 例如: "011114ce..._Nope#2026-07-24" 會變成 "011114ce..._Nope"
+        sent_base_keys = set([combo.split("#")[0] for combo in sent_combos])
+        
         pending_announcements = []
-        new_sent_count = 0
         
         with open(file_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -103,13 +108,15 @@ def run_notifier(jsonl_dir, history_dir):
                     uuid_val = data.get("uuid", "")
                     
                     # 嚴格過濾時間
-                    if not date_val or date_val < "2026-01-01":
-                        continue
+                    if not date_val: continue
+                    if date_val != "Nope" and date_val < "2026-01-01": continue
                     
-                    combo_key = f"{uuid_val}_{date_val}"
+                    # 這是原始資料的 Key (如: uuid_2026-04-10 或 uuid_Nope)
+                    base_key = f"{uuid_val}_{date_val}"
                     
-                    if combo_key not in sent_set:
-                        pending_announcements.append((combo_key, data))
+                    # 3. 使用切掉 # 的基礎 Key 來判斷是否已經發送過
+                    if base_key not in sent_base_keys:
+                        pending_announcements.append((base_key, data))
                         
                 except json.JSONDecodeError:
                     pass
@@ -117,16 +124,29 @@ def run_notifier(jsonl_dir, history_dir):
         # 由舊到新排序確保時間軸合理
         pending_announcements.sort(key=lambda x: x[1].get("date", "2026-01-01"))
         
-        for combo_key, data in pending_announcements:
-            success = send_message(webhook_url, site_name, data)
+        new_sent_count = 0
+        for base_key, data in pending_announcements:
+            date_val = data.get("date", "")
+            
+            # 4. 針對 Nope 處理顯示日期與儲存的 Key
+            if date_val == "Nope":
+                display_date = today_date
+                save_key = f"{base_key}#{today_date}" # 加上發現時間的標記
+            else:
+                display_date = date_val
+                save_key = base_key # 正常日期的就保持原樣
+                
+            success = send_message(webhook_url, site_name, data, display_date)
             if success:
-                sent_set.add(combo_key)
+                # 同步更新集合與列表
+                sent_base_keys.add(base_key) 
+                sent_combos.append(save_key)
                 new_sent_count += 1
                 time.sleep(1.5)
 
-        # 覆蓋寫入最新的對照表
+        # 覆蓋寫入最新的對照表 (包含帶有 # 標記的完整字串)
         with open(history_file, "w", encoding="utf-8") as f:
-            json.dump(sorted(list(sent_set)), f, ensure_ascii=False, indent=4)
+            json.dump(sorted(sent_combos), f, ensure_ascii=False, indent=4)
             
         if new_sent_count > 0:
             print(f"   [完成] {site_name} 共推送 {new_sent_count} 則新公告，對照表已更新。")
