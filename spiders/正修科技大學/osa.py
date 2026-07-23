@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 def run(site_output_dir, fetch_content):
     os.makedirs(site_output_dir, exist_ok=True)
     
-    category = "學務處公告_AI格式"
+    category = "學務處公告"
     delay = 1.0
     
     # 針對第 1 到第 3 頁進行迴圈爬取
