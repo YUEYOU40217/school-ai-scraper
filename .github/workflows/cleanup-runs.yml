@@ -13,10 +13,19 @@ jobs:
   del_runs:
     runs-on: ubuntu-latest
     steps:
-      - name: 刪除舊的 Workflow 執行紀錄
+      - name: 刪除三天前的舊 Workflow 執行紀錄 (一般任務)
         uses: Mattraks/delete-workflow-runs@v2
         with:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
-          retain_days: 7         
-          keep_minimum_runs: 10   
+          retain_days: 3            # 修改為保留 3 天
+          keep_minimum_runs: 3      # 最少保留 3 次 (避免三天內都沒跑被清空)
+
+      - name: 清理「清理紀錄」本身的執行紀錄 (只留當下最新一次)
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0            # 設為 0 天
+          keep_minimum_runs: 0      # 設為 0 次 (套件會自動避開正在執行的這一次，因此實際上會剛好留下 1 次)
+          delete_workflow_pattern: "Cleanup Old Workflow Runs" # 指定只針對這個 Workflow 進行清理
