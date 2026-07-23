@@ -73,6 +73,7 @@ def process_single_html_with_retry(site_name, file_path):
 
     current_year = datetime.now().year
 
+    # 【修改重點】更新 prompt 中的 short_name 規則，使其動態適應所有學校與處室
     prompt = f"""
 你是一個嚴格的網頁資料結構化專家。請將以下 HTML 中的「公告/新聞」提取出來，並「嚴格」遵守 JSONL 格式輸出。
 
@@ -84,10 +85,16 @@ def process_single_html_with_retry(site_name, file_path):
 2. 第一行是來源統計：
 {{"source_name": "{site_name}", "source_link": "該網站網址", "total_count": 0}}
 3. 第二行開始，每一行代表一個公告。UUID 請留空。請特別注意標題內的雙引號 (") 必須使用反斜線跳脫 (\\")，以免破壞 JSON 格式！
-{{"uuid": "", "date": "YYYY-MM-DD", "short_name": "學校縮寫", "title": "公告標題", "link": "完整超連結", "keywords": ["字1", "字2", "字3", "字4", "字5"]}}
+{{"uuid": "", "date": "YYYY-MM-DD", "short_name": "動態處室與學校縮寫", "title": "公告標題", "link": "完整超連結", "keywords": ["字1", "字2", "字3", "字4", "字5"]}}
 
 【重要原則 - 欄位解析】：
-- short_name：請從該公告的「超連結網址」中自動擷取學校的英文縮寫（例如包含 csu.edu.tw 就填 "csu"）。
+- short_name：請從該公告的「超連結網址」中動態擷取「處室網域.學校網域」。
+  * 觀察網址中位於 .edu.tw 前面的主機名稱結構，格式一律取「子網域.學校網域」。
+  * 例如網址為 "https://osa.csu.edu.tw/..."，請填 "osa.csu"
+  * 例如網址為 "https://general.csu.edu.tw/..."，請填 "general.csu"
+  * 例如網址為 "https://www.csu.edu.tw/..."，請填 "www.csu"
+  * 例如網址為 "https://www.nkust.edu.tw/..."，請填 "www.nkust"
+  * 請依此類推，嚴格根據實際抓取到的網址動態填寫。
 - date：必須輸出 YYYY-MM-DD 的西元年格式。若僅有月日而缺少年份，預設為【 {current_year} 】年。
 - keywords：陣列【必須且絕對只能剛好是 5 個元素】。
 - 【台灣年份與學期對照表 (嚴格遵守，禁止自行計算)】：
@@ -151,7 +158,6 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
                 elif "link" in data:
                     new_title = data.get("title", "").strip()
                     
-                    # 【核心應用】在這裡對 AI 吐出來的網址進行清洗與絕對路徑轉換
                     raw_link = data.get("link", "").strip()
                     new_link = sanitize_link(raw_link, site_name)
                     
@@ -178,7 +184,6 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
                         if old_item.get("keywords"):
                             data["keywords"] = old_item["keywords"]
                             
-                        # 強制將舊資料的髒網址覆蓋為乾淨的網址
                         data["link"] = new_link
                         data["title"] = new_title
                         
