@@ -33,7 +33,11 @@ def run(site_output_dir, fetch_content):
             title = a_tag.text.strip()
             link = a_tag.get("href")
             date = "Nope"
-            
+
+            # 請求之前，第一時間把空白和 %20 去掉
+            if link:
+                link = link.strip().replace(" ", "").replace("%20", "")
+                
             # 處理相對路徑
             if link.startswith("/"):
                 link = "https://osa.csu.edu.tw" + link
