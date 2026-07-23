@@ -4,7 +4,6 @@ import json
 import re
 import uuid
 import time
-from datetime import datetime
 from google import genai
 
 MODEL_NAME = "gemini-3.1-flash-lite"
@@ -71,9 +70,7 @@ def process_single_html_with_retry(site_name, file_path):
     with open(file_path, "r", encoding="utf-8") as f:
         html_content = f.read()
 
-    current_year = datetime.now().year
-
-    # 【修改重點】更新 prompt 中的 short_name 規則，使其動態適應所有學校與處室
+    # 【修改重點】拿掉 current_year 邏輯，明確要求遇到 Nope 就填 Nope，不要自己補年份
     prompt = f"""
 你是一個嚴格的網頁資料結構化專家。請將以下 HTML 中的「公告/新聞」提取出來，並「嚴格」遵守 JSONL 格式輸出。
 
@@ -95,7 +92,7 @@ def process_single_html_with_retry(site_name, file_path):
   * 例如網址為 "https://www.csu.edu.tw/..."，請填 "www.csu"
   * 例如網址為 "https://www.nkust.edu.tw/..."，請填 "www.nkust"
   * 請依此類推，嚴格根據實際抓取到的網址動態填寫。
-- date：必須輸出 YYYY-MM-DD 的西元年格式。若僅有月日而缺少年份，預設為【 {current_year} 】年。
+- date：請抓取原始 HTML 中的日期。若原始標示為「Nope」，請直接填寫 "Nope"。若為正常日期請盡量轉為 YYYY-MM-DD，若缺少年份請「照實輸出」（後端會自行處理），絕對不要自行補齊年份。
 - keywords：陣列【必須且絕對只能剛好是 5 個元素】。
 - 【台灣年份與學期對照表 (嚴格遵守，禁止自行計算)】：
   若為純民國年：112年=2023年，113年=2024年，114年=2025年，115年=2026年，116年=2027年。
@@ -179,8 +176,11 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
                     if matched_uuid:
                         data["uuid"] = matched_uuid
                         old_item = existing_items[matched_uuid]
-                        if old_item.get("date") and old_item["date"] != "1970-01-01":
+                        
+                        # 保留舊有正確日期
+                        if old_item.get("date") and old_item["date"] not in ["1970-01-01", "Nope"]:
                             data["date"] = old_item["date"]
+                            
                         if old_item.get("keywords"):
                             data["keywords"] = old_item["keywords"]
                             
@@ -190,8 +190,10 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
                         existing_items[matched_uuid] = data
                     else:
                         data["uuid"] = get_stable_uuid(new_link, new_title)
+                        
+                        # 處理防呆，如果 AI 回傳沒帶 date 欄位，預設給 Nope
                         if "date" not in data or not data["date"]:
-                            data["date"] = "1970-01-01"
+                            data["date"] = "Nope"
                             
                         data["link"] = new_link
                         existing_items[data["uuid"]] = data
@@ -201,7 +203,9 @@ def merge_and_save_jsonl(site_name, ai_jsonl_chunks, output_file_path):
 
     unique_items = {item["uuid"]: item for item in existing_items.values()}
     sorted_items = list(unique_items.values())
-    sorted_items.sort(key=lambda x: x.get("date", "1970-01-01"), reverse=True)
+    
+    # 排序時讓 Nope 沉到底部
+    sorted_items.sort(key=lambda x: "0000-00-00" if x.get("date") in ["Nope", "1970-01-01", ""] else x.get("date", "0000-00-00"), reverse=True)
 
     metadata["total_count"] = len(sorted_items)
     with open(output_file_path, "w", encoding="utf-8") as f:
