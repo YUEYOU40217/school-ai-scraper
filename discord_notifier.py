@@ -21,14 +21,16 @@ def get_embed_color(link):
         
     return 3447003
 
-# 新增 display_date 參數，用來決定畫面上要顯示的日期
 def send_message(webhook_url, site_name, item, display_date):
     title = item.get("title", "無標題公告")
     link = item.get("link", "")
     short_name = item.get("short_name", "校園")
     
-    # 使用傳入的 display_date 排版
-    description_text = f"\n\n **發布日期：** {display_date}"
+    # 【修改重點 1】如果 display_date 是空字串，就完全不放入這行字
+    if display_date:
+        description_text = f"\n\n **發布日期：** {display_date}"
+    else:
+        description_text = ""
     
     payload = {
         "content": f"：嗚、嗚、嗚、嗚！**{site_name} ({short_name}) 有新公告吱！**！！",
@@ -78,10 +80,8 @@ def run_notifier(jsonl_dir, history_dir):
             
         history_file = os.path.join(history_dir, f"{site_name}_history.json")
         
-        # 【新增】判斷是否為第一次啟動（第一次建立對照表的時候）
         is_first_run = not os.path.exists(history_file)
         
-        # 1. 讀取歷史檔案的原始字串列表
         sent_combos = []
         if not is_first_run:
             try:
@@ -94,9 +94,6 @@ def run_notifier(jsonl_dir, history_dir):
             except json.JSONDecodeError:
                 pass
                 
-        # 2. 建立「基礎對照集合」：把 # 後面的發現時間切掉，只留 {uuid}_{date} 用來比對
-        # 例如: "011114ce..._Nope#2026-07-24" 會變成 "011114ce..._Nope"
-        # 這樣之後的比對就能自動忽略後面的 #標籤，不會誤判為沒發過的新公告！
         sent_base_keys = set([combo.split("#")[0] for combo in sent_combos])
         
         pending_announcements = []
@@ -111,51 +108,44 @@ def run_notifier(jsonl_dir, history_dir):
                     date_val = data.get("date", "")
                     uuid_val = data.get("uuid", "")
                     
-                    # 嚴格過濾時間（保留 2026 以後與 Nope）
                     if not date_val: continue
                     if date_val != "Nope" and date_val < "2026-01-01": continue
                     
-                    # 這是原始資料的 Key (如: uuid_2026-04-10 或 uuid_Nope)
                     base_key = f"{uuid_val}_{date_val}"
                     
-                    # 3. 使用切掉 # 的基礎 Key 來判斷是否已經發送過
                     if base_key not in sent_base_keys:
                         pending_announcements.append((base_key, data))
                         
                 except json.JSONDecodeError:
                     pass
         
-        # 由舊到新排序確保時間軸合理
         pending_announcements.sort(key=lambda x: x[1].get("date", "2026-01-01"))
         
         new_sent_count = 0
         for base_key, data in pending_announcements:
             date_val = data.get("date", "")
             
-            # 4. 針對 Nope 處理顯示日期與儲存的 Key
+            # 【修改重點 2】處理 Nope 時的參數傳遞
             if date_val == "Nope":
                 if is_first_run:
-                    # 第一次啟動時，不加上今天的日期，直接顯示「Nope」或「未知日期」
-                    display_date = "未知日期"
+                    # 第一次啟動時，把日期設為空字串，上面排版時就會自動把那行藏起來
+                    display_date = ""
                 else:
                     # 後續發現新公告時，印上當天發現的時間
                     display_date = today_date
                     
-                # 兩者都會在對照表打上 #發現日期 的標籤
                 save_key = f"{base_key}#{today_date}" 
             else:
                 display_date = date_val
-                save_key = base_key # 正常日期的就保持原樣
+                save_key = base_key
                 
             success = send_message(webhook_url, site_name, data, display_date)
             if success:
-                # 同步更新集合與列表
                 sent_base_keys.add(base_key) 
                 sent_combos.append(save_key)
                 new_sent_count += 1
                 time.sleep(1.5)
 
-        # 覆蓋寫入最新的對照表 (包含帶有 # 標記的完整字串)
         with open(history_file, "w", encoding="utf-8") as f:
             json.dump(sorted(sent_combos), f, ensure_ascii=False, indent=4)
             
