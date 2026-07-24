@@ -78,9 +78,12 @@ def run_notifier(jsonl_dir, history_dir):
             
         history_file = os.path.join(history_dir, f"{site_name}_history.json")
         
+        # 【新增】判斷是否為第一次啟動（第一次建立對照表的時候）
+        is_first_run = not os.path.exists(history_file)
+        
         # 1. 讀取歷史檔案的原始字串列表
         sent_combos = []
-        if os.path.exists(history_file):
+        if not is_first_run:
             try:
                 with open(history_file, "r", encoding="utf-8") as f:
                     data_loaded = json.load(f)
@@ -93,6 +96,7 @@ def run_notifier(jsonl_dir, history_dir):
                 
         # 2. 建立「基礎對照集合」：把 # 後面的發現時間切掉，只留 {uuid}_{date} 用來比對
         # 例如: "011114ce..._Nope#2026-07-24" 會變成 "011114ce..._Nope"
+        # 這樣之後的比對就能自動忽略後面的 #標籤，不會誤判為沒發過的新公告！
         sent_base_keys = set([combo.split("#")[0] for combo in sent_combos])
         
         pending_announcements = []
@@ -107,7 +111,7 @@ def run_notifier(jsonl_dir, history_dir):
                     date_val = data.get("date", "")
                     uuid_val = data.get("uuid", "")
                     
-                    # 嚴格過濾時間
+                    # 嚴格過濾時間（保留 2026 以後與 Nope）
                     if not date_val: continue
                     if date_val != "Nope" and date_val < "2026-01-01": continue
                     
@@ -130,8 +134,15 @@ def run_notifier(jsonl_dir, history_dir):
             
             # 4. 針對 Nope 處理顯示日期與儲存的 Key
             if date_val == "Nope":
-                display_date = today_date
-                save_key = f"{base_key}#{today_date}" # 加上發現時間的標記
+                if is_first_run:
+                    # 第一次啟動時，不加上今天的日期，直接顯示「Nope」或「未知日期」
+                    display_date = "未知日期"
+                else:
+                    # 後續發現新公告時，印上當天發現的時間
+                    display_date = today_date
+                    
+                # 兩者都會在對照表打上 #發現日期 的標籤
+                save_key = f"{base_key}#{today_date}" 
             else:
                 display_date = date_val
                 save_key = base_key # 正常日期的就保持原樣
