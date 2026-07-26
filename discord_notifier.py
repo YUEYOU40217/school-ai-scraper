@@ -33,7 +33,7 @@ def send_message(webhook_url, site_name, item, display_date):
         description_text = ""
     
     payload = {
-        "content": f"：嗚、嗚、嗚、嗚！**{site_name} ({short_name}) 有新公告吱！**！！",
+        "content": f"：嗚、嗚、嗚、嗚！**{site_name} 有新公告吱！**！！",
         "embeds": [
             {
                 "title": title,
