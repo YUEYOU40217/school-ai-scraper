@@ -1,49 +1,51 @@
 import os
 import time
-from bs4 import BeautifulSoup
+import requests
+
+# 停用不安全連線警告
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def run(site_output_dir, fetch_content):
-    # 【修正】使用主程式傳進來的安全路徑，絕對不要寫死絕對路徑
     os.makedirs(site_output_dir, exist_ok=True)
     
     category = "高科大郵件與公告"
     delay = 1.0
     
-    target_url = "https://officemail.nkust.edu.tw/mail"
-    print(f"      [{category}] 開始抓取單頁: {target_url}")
+    # 【改變戰術】不抓網頁，直接戳隱藏的資料 API 端點
+    api_url = "https://officemail.nkust.edu.tw/mail/ReadIndex"
+    print(f"      [{category}] 開始請求 API: {api_url}")
     
-    page_html = fetch_content(target_url)
+    # 模擬 Kendo UI Grid 發送的請求參數 (通常是請求第一頁，每頁10筆)
+    payload = {
+        "page": 1,
+        "pageSize": 10
+    }
     
-    if not page_html:
-        print(f"         -> [抓取失敗] 無法取得該頁面內容")
-        return
-        
-    soup = BeautifulSoup(page_html, "html.parser")
+    # 加上 Header 偽裝成是瀏覽器發出的 AJAX 請求
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "X-Requested-With": "XMLHttpRequest",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+    }
     
-    # 尋找主要的容器或整頁核心
-    target_block = soup.find("div", class_="wrap") or soup.find("body")
-    
-    if target_block:
-        # 清洗區塊內的相對網址
-        for a_tag in target_block.find_all("a"):
-            link = a_tag.get("href")
-            if link:
-                link = link.strip().replace(" ", "").replace("%20", "")
-                if link.startswith("/"):
-                    link = "https://officemail.nkust.edu.tw" + link
-                a_tag["href"] = link 
+    try:
+        # 直接使用 requests 發送 POST 請求
+        response = requests.post(api_url, data=payload, headers=headers, verify=False, timeout=10)
         
-        page_output_html = str(target_block)
-        
-        # 嚴格使用 site_output_dir 進行存檔
-        filename = "officemail_p1.html"
-        file_path = os.path.join(site_output_dir, filename)
-        
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(page_output_html)
-        
-        print(f"         -> [成功存檔] {filename}")
-    else:
-        print(f"         -> [解析失敗] 找不到對應的網頁結構")
+        if response.status_code == 200:
+            # 這次抓回來的大機率是 JSON 格式，我們存成 .json 檔來看看
+            filename = "officemail_api_p1.json"
+            file_path = os.path.join(site_output_dir, filename)
+            
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(response.text)
+            
+            print(f"         -> [成功存檔] {filename}")
+        else:
+            print(f"         -> [抓取失敗] API 回傳狀態碼: {response.status_code}")
+            
+    except Exception as e:
+        print(f"         -> [抓取錯誤] 發生異常: {e}")
             
     time.sleep(delay)
