@@ -20,8 +20,11 @@ jobs:
         run: |
           git clone --branch gh-pages "https://github.com/${{ github.repository }}.git" gh-pages-data || echo "gh-pages 分支還不存在，略過"
           
-          mkdir -p final_results discord_history
+          mkdir -p crawler_pages final_results discord_history
           
+          if [ -d "gh-pages-data/crawler_pages" ]; then
+            cp -r gh-pages-data/crawler_pages/* ./crawler_pages/ || true
+          fi
           if [ -d "gh-pages-data/final_results" ]; then
             cp -r gh-pages-data/final_results/* ./final_results/ || true
           fi
