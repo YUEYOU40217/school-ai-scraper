@@ -65,7 +65,7 @@ def run_notifier(jsonl_dir, history_dir):
     
     webhook_map = {
         "正修科技大學": os.environ.get("WEBHOOK_CSU"),
-        "國立高雄科技大學": os.environ.get("WEBHOOK_NKUST"),
+        "高雄科技大學": os.environ.get("WEBHOOK_NKUST"),
     }
 
     jsonl_files = glob.glob(os.path.join(jsonl_dir, "*.jsonl"))
