@@ -15,9 +15,6 @@ def main():
     os.makedirs(crawler_output_root, exist_ok=True)
     os.makedirs(final_results_root, exist_ok=True)
     os.makedirs(discord_history_root, exist_ok=True)
-    print(f"   -> 確認 {crawler_output_root} 存在")
-    print(f"   -> 確認 {final_results_root} 存在")
-    print(f"   -> 確認 {discord_history_root} 存在")
     
     if os.path.exists(spiders_root):
         print("\n【環境初始化】準備爬蟲輸出子目錄...")
@@ -26,11 +23,16 @@ def main():
             
             if os.path.isdir(item_path) and not item.startswith("__"):
                 target_dir = os.path.join(crawler_output_root, item)
-                
                 os.makedirs(target_dir, exist_ok=True)
+                
+                gitkeep_file = os.path.join(target_dir, ".gitkeep")
+                if not os.path.exists(gitkeep_file):
+                    with open(gitkeep_file, "w", encoding="utf-8") as f:
+                        f.write("")
+                        
                 print(f"   -> 已建立/確認學校目錄: {target_dir}")
     else:
-        print(f"[警告] 找不到 {spiders_root} 資料夾，請確認爬蟲原始檔位置是否正確！")
+        print(f"[警告] 找不到 {spiders_root} 資料夾！")
 
     print("\n--------------------------------------------------")
     
