@@ -15,7 +15,7 @@ def run(site_output_dir, fetch_content):
     
     print(f"      [{category}] 開始請求 API: {api_url}")
     
-    for page in range(1, 5):
+    for page in range(1, 6):
         payload = {
             "page": page,
             "pageSize": 20
