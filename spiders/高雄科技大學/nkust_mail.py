@@ -15,10 +15,10 @@ def run(site_output_dir, fetch_content):
     
     print(f"      [{category}] 開始請求 API: {api_url}")
     
-    for page in range(1, 2):
+    for page in range(1, 5):
         payload = {
             "page": page,
-            "pageSize": 100
+            "pageSize": 20
         }
         
         headers = {
