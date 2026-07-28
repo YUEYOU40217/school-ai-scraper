@@ -9,17 +9,16 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 def run(site_output_dir, fetch_content):
     os.makedirs(site_output_dir, exist_ok=True)
     
-    category = "高科大郵件與公告"
+    category = "高科大郵件公告"
     delay = 1.0
     api_url = "https://officemail.nkust.edu.tw/mail/ReadIndex"
     
     print(f"      [{category}] 開始請求 API: {api_url}")
     
-    # 設定要抓取第 1 到第 3 頁 (你可以視需求調整)
-    for page in range(1, 4):
+    for page in range(1, 2):
         payload = {
             "page": page,
-            "pageSize": 10
+            "pageSize": 100
         }
         
         headers = {
@@ -47,13 +46,10 @@ def run(site_output_dir, fetch_content):
                     subject = item.get("Subject", "").strip()
                     send_date = item.get("SendDate", "Nope").strip()
                     
-                    # 將處室名稱併入標題，讓前端顯示更清楚
                     title = f"[{sender}] {subject}"
                     
-                    # 組合出這封信件的絕對網址
                     link = f"https://officemail.nkust.edu.tw/mail/Read/{mail_id}"
                     
-                    # 組裝成 AI 解析器熟悉的標準 HTML 結構
                     html_block = f"""
 <div class="mbox">
     <div class="d-txt">
