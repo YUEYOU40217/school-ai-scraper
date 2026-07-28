@@ -9,7 +9,6 @@ from google import genai
 MODEL_NAME = "gemini-3.1-flash-lite"
 ai_client = None
 
-# 【新增】學校網域對照表：專門用來修復相對路徑
 DOMAIN_MAP = {
     "正修科技大學": "https://www.csu.edu.tw",
     "國立高雄科技大學": "https://www.nkust.edu.tw"
@@ -43,15 +42,12 @@ def sanitize_link(raw_link, site_name):
     """【核心淨水器】過濾空白字元並將相對路徑轉換為絕對網址"""
     if not raw_link:
         return ""
-        
-    # 1. 殺死所有空白與錯誤編碼
+
     clean_link = raw_link.strip().replace(" ", "").replace("%20", "")
-    
-    # 2. 如果已經是完整網址，直接回傳
+
     if clean_link.startswith("http"):
         return clean_link
-        
-    # 3. 處理相對路徑，根據學校名稱補上對應網域
+
     base_domain = DOMAIN_MAP.get(site_name, "https://")
     if clean_link.startswith("/"):
         return base_domain + clean_link
@@ -70,7 +66,6 @@ def process_single_html_with_retry(site_name, file_path):
     with open(file_path, "r", encoding="utf-8") as f:
         html_content = f.read()
 
-    # 【修改重點】拿掉 current_year 邏輯，明確要求遇到 Nope 就填 Nope，不要自己補年份
     prompt = f"""
 你是一個嚴格的網頁資料結構化專家。請將以下 HTML 中的「公告/新聞」提取出來，並「嚴格」遵守 JSONL 格式輸出。
 
