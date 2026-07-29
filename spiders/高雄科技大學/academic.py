@@ -9,7 +9,6 @@ def run(site_output_dir, fetch_content):
     delay = 1.0
     
     for page in range(1, 4):
-        # 網址替換為學術公告的 1002
         target_url = f"https://www.nkust.edu.tw/p/422-1000-1002-{page}.php?Lang=zh-tw"
         print(f"      [{category}] 開始抓取列表第 {page} 頁: {target_url}")
         
@@ -21,11 +20,10 @@ def run(site_output_dir, fetch_content):
             
         soup = BeautifulSoup(list_html, "html.parser")
         
-        # 沿用剛才成功的定位點
+
         target_block = soup.find("div", id="pageptlist")
         
         if target_block:
-            # 處理超連結，將相對路徑轉為絕對路徑
             for a_tag in target_block.find_all("a"):
                 link = a_tag.get("href")
                 if link:
@@ -34,7 +32,7 @@ def run(site_output_dir, fetch_content):
                         link = "https://www.nkust.edu.tw" + link
                     a_tag["href"] = link
             
-            # 只儲存乾淨的公告列表區塊
+
             page_output_html = str(target_block)
             
             filename = f"{category}_p{page}.html"
