@@ -1,6 +1,5 @@
 import os
 import time
-from bs4 import BeautifulSoup
 
 def run(site_output_dir, fetch_content):
     os.makedirs(site_output_dir, exist_ok=True)
@@ -18,29 +17,12 @@ def run(site_output_dir, fetch_content):
             print(f"         -> [抓取失敗] 無法取得第 {page} 頁內容")
             continue
             
-        soup = BeautifulSoup(list_html, "html.parser")
+        filename = f"{category}_p{page}.html"
+        file_path = os.path.join(site_output_dir, filename)
         
-        target_block = soup.find("div", class_="module-rcglist")
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(list_html)
         
-        if target_block:
-            for a_tag in target_block.find_all("a"):
-                link = a_tag.get("href")
-                if link:
-                    link = link.strip().replace(" ", "").replace("%20", "")
-                    if link.startswith("/"):
-                        link = "https://www.nkust.edu.tw" + link
-                    a_tag["href"] = link
-            
-            page_output_html = str(target_block)
-            
-            filename = f"{category}_p{page}.html"
-            file_path = os.path.join(site_output_dir, filename)
-            
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(page_output_html)
-            
-            print(f"         -> [成功存檔] {filename}")
-        else:
-            print(f"         -> [解析失敗] 找不到 module-rcglist 區塊")
+        print(f"         -> [成功存檔] {filename}")
                 
         time.sleep(delay)
