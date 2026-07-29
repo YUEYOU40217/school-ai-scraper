@@ -33,6 +33,7 @@ def send_message(webhook_url, site_name, item, display_date):
         description_text = ""
     
     payload = {
+        "thread_name": title[:100],  # 【新增這行】指定論壇貼文的標題，限制最大 100 字元避免報錯
         "content": f"：嗚、嗚、嗚、嗚！**{site_name} 有新公告吱！**！！",
         "embeds": [
             {
