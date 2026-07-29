@@ -26,15 +26,16 @@ def send_message(webhook_url, site_name, item, display_date):
     link = item.get("link", "")
     short_name = item.get("short_name", "校園")
     
-    # 如果 display_date 是空字串，就完全不放入這行字
     if display_date:
         description_text = f"\n\n **發布日期：** {display_date}"
+        content_text = f"發布日期：{display_date}"
     else:
         description_text = ""
+        content_text = f"{site_name} 最新公告"
     
     payload = {
-        "thread_name": title[:100],  # 【新增這行】指定論壇貼文的標題，限制最大 100 字元避免報錯
-        "content": f"：嗚、嗚、嗚、嗚！**{site_name} 有新公告吱！**！！",
+        "thread_name": title[:100],
+        "content": content_text,
         "embeds": [
             {
                 "title": title,
@@ -81,7 +82,6 @@ def run_notifier(jsonl_dir, history_dir):
             
         history_file = os.path.join(history_dir, f"{site_name}_history.json")
         
-        # 判斷是否為第一次啟動
         is_first_run = not os.path.exists(history_file)
         
         sent_combos = []
@@ -121,17 +121,15 @@ def run_notifier(jsonl_dir, history_dir):
                 except json.JSONDecodeError:
                     pass
         
-        # 【修改重點】設計動態的排序邏輯
+
         def get_sort_key(item):
             date_val = item[1].get("date", "")
             if date_val == "Nope":
                 if is_first_run:
-                    # 第一次啟動：給 Nope 最小的時間值，強迫排在陣列最前面 (優先發送)
                     return "0000-00-00"
                 else:
-                    # 第二次往後：把 Nope 當作今天才發布的，和其他今天的新公告排在一起發送
                     return today_date
-            return date_val # 正常的日期就直接用字串本身排序
+            return date_val
             
         pending_announcements.sort(key=get_sort_key)
         
@@ -141,13 +139,10 @@ def run_notifier(jsonl_dir, history_dir):
             
             if date_val == "Nope":
                 if is_first_run:
-                    # 第一次啟動時，不顯示發布日期
                     display_date = ""
                 else:
-                    # 後續發現新公告時，印上當天發現的時間標籤
                     display_date = today_date
                     
-                # 不論第幾次，存入歷史紀錄時一定會帶上 #發現日期
                 save_key = f"{base_key}#{today_date}" 
             else:
                 display_date = date_val
@@ -156,7 +151,7 @@ def run_notifier(jsonl_dir, history_dir):
             success = send_message(webhook_url, site_name, data, display_date)
             if success:
                 sent_base_keys.add(base_key) 
-                sent_combos.append(save_key) # 發送成功後，加入帶有 #標籤 的對照字串
+                sent_combos.append(save_key)
                 new_sent_count += 1
                 time.sleep(1.5)
 
