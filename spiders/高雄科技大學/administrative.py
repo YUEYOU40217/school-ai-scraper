@@ -20,11 +20,10 @@ def run(site_output_dir, fetch_content):
             
         soup = BeautifulSoup(list_html, "html.parser")
         
-        # 精準鎖定你提供的 HTML 中的 id="pageptlist"
+ 
         target_block = soup.find("div", id="pageptlist")
         
         if target_block:
-            # 處理超連結，將相對路徑轉為絕對路徑
             for a_tag in target_block.find_all("a"):
                 link = a_tag.get("href")
                 if link:
@@ -32,8 +31,7 @@ def run(site_output_dir, fetch_content):
                     if link.startswith("/"):
                         link = "https://www.nkust.edu.tw" + link
                     a_tag["href"] = link
-            
-            # 只儲存乾淨的公告列表區塊
+
             page_output_html = str(target_block)
             
             filename = f"{category}_p{page}.html"
