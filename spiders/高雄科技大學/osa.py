@@ -20,21 +20,18 @@ def run(site_output_dir, fetch_content):
             
         soup = BeautifulSoup(list_html, "html.parser")
         
-        # 鎖定包含公告表格的 id="pageptlist" 區塊
         target_block = soup.find("div", id="pageptlist")
         
         if target_block:
-            # 處理超連結，將相對路徑轉為絕對路徑
             for a_tag in target_block.find_all("a"):
                 link = a_tag.get("href")
                 if link:
                     link = link.strip().replace(" ", "").replace("%20", "")
-                    if link.startswith("/"):
-                        # 注意這裡的網域要換成學務處的子網域
+
                         link = "https://osa.nkust.edu.tw" + link
                     a_tag["href"] = link
             
-            # 只儲存乾淨的公告表格區塊
+
             page_output_html = str(target_block)
             
             filename = f"{category}_p{page}.html"
