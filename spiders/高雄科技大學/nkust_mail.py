@@ -15,7 +15,7 @@ def run(site_output_dir, fetch_content):
     
     print(f"      [{category}] 開始請求 API: {api_url}")
     
-    # 直接抓取第 1 頁，並要求一次回傳 50 筆資料
+    # 直接抓取第 1 頁，並要求一次回傳 50 筆資料 (你目前設定為抓 8 頁，每頁 20 筆)
     for page in range(1, 9):
         payload = {
             "page": page,
@@ -50,8 +50,8 @@ def run(site_output_dir, fetch_content):
                     # 將處室名稱併入標題，讓前端顯示更清楚
                     title = f"[{sender}] {subject}"
                     
-                    # 組合出這封信件的絕對網址
-                    link = f"https://officemail.nkust.edu.tw/mail/Read/{mail_id}"
+                    # 【修正這裡】將 Read 改為真正提供前端顯示的 MailView
+                    link = f"https://officemail.nkust.edu.tw/Mail/MailView/{mail_id}"
                     
                     # 組裝成 AI 解析器熟悉的標準 HTML 結構
                     html_block = f"""
