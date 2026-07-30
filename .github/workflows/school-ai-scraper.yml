@@ -2,7 +2,7 @@ name: Hourly Auto Scraper
 
 on:
   schedule:
-    - cron: "13 0,4,8,12,16,18 * * *"
+    - cron: "13 0,6,12,18 * * *"
   workflow_dispatch:
 
 permissions:
