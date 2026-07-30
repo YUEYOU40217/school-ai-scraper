@@ -72,7 +72,9 @@ def run_notifier(jsonl_dir, history_dir):
 
     jsonl_files = glob.glob(os.path.join(jsonl_dir, "*.jsonl"))
     for file_path in jsonl_files:
-        site_name = os.path.basename(file_path).replace(".jsonl", "")
+
+        file_basename = os.path.basename(file_path)
+        site_name = file_basename.replace(".jsonl", "")
         print(f"   -> 正在檢查: {site_name}")
         
         webhook_url = webhook_map.get(site_name)
@@ -89,10 +91,17 @@ def run_notifier(jsonl_dir, history_dir):
             try:
                 with open(history_file, "r", encoding="utf-8") as f:
                     data_loaded = json.load(f)
+                    
                     if isinstance(data_loaded, dict):
-                        sent_combos = list(data_loaded.keys())
+                        if "sent_records" in data_loaded:
+                            sent_combos = data_loaded["sent_records"]
+
+                        else:
+                            sent_combos = list(data_loaded.keys())
+
                     elif isinstance(data_loaded, list):
                         sent_combos = data_loaded
+                        
             except json.JSONDecodeError:
                 pass
                 
@@ -121,7 +130,6 @@ def run_notifier(jsonl_dir, history_dir):
                 except json.JSONDecodeError:
                     pass
         
-
         def get_sort_key(item):
             date_val = item[1].get("date", "")
             if date_val == "Nope":
@@ -155,8 +163,14 @@ def run_notifier(jsonl_dir, history_dir):
                 new_sent_count += 1
                 time.sleep(1.5)
 
+        save_data = {
+            "source_file": file_basename,
+            "total_sent_count": len(sent_combos),
+            "sent_records": sorted(sent_combos)
+        }
+
         with open(history_file, "w", encoding="utf-8") as f:
-            json.dump(sorted(sent_combos), f, ensure_ascii=False, indent=4)
+            json.dump(save_data, f, ensure_ascii=False, indent=4)
             
         if new_sent_count > 0:
             print(f"   [完成] {site_name} 共推送 {new_sent_count} 則新公告，對照表已更新。")
