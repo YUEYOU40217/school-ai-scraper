@@ -1,6 +1,5 @@
 import os
 import time
-from bs4 import BeautifulSoup
 
 def run(site_output_dir, fetch_content):
     os.makedirs(site_output_dir, exist_ok=True)
@@ -18,40 +17,13 @@ def run(site_output_dir, fetch_content):
             print(f"         -> [抓取失敗] 無法取得第 {page} 頁內容")
             continue
             
-        soup = BeautifulSoup(list_html, "html.parser")
+        # 不做任何解析，直接將整頁 HTML 寫入檔案
+        filename = f"{category}_p{page}.html"
+        file_path = os.path.join(site_output_dir, filename)
         
-
-        target_block = soup.find("div", id="pageptlist")
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(list_html)
         
-        if target_block:
-
-            for a_tag in target_block.find_all("a"):
-                link = a_tag.get("href")
-                if link:
-                    link = link.strip().replace(" ", "").replace("%20", "")
-                    if link.startswith("/"):
-                       
-                        link = "https://acad.nkust.edu.tw" + link
-                    a_tag["href"] = link
-            
-           
-            for top_img in target_block.find_all("img"):
-                 top_img.decompose()
-            
-            
-            for text_node in target_block.find_all(string=lambda text: "%置頂%" in text):
-                 text_node.replace_with(text_node.replace("%置頂%", "").strip())
-
-            page_output_html = str(target_block)
-            
-            filename = f"{category}_p{page}.html"
-            file_path = os.path.join(site_output_dir, filename)
-            
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(page_output_html)
-            
-            print(f"         -> [成功存檔] {filename}")
-        else:
-            print(f"         -> [解析失敗] 找不到 id 為 pageptlist 的區塊")
+        print(f"         -> [成功存檔] {filename}")
                 
         time.sleep(delay)
