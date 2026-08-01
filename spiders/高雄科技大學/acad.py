@@ -1,5 +1,4 @@
 import os
-import json
 from bs4 import BeautifulSoup
 
 def run(site_output_dir, fetch_content):
@@ -44,6 +43,10 @@ def run(site_output_dir, fetch_content):
                 title = a_tag.get_text(strip=True)
                 link = a_tag.get("href", "")
                 
+                # 若連結是相對路徑，補上主網域
+                if link.startswith("/"):
+                    link = "https://acad.nkust.edu.tw" + link
+                
                 # 清理標題中多餘的換行或空白
                 title = " ".join(title.split())
                 
@@ -58,11 +61,55 @@ def run(site_output_dir, fetch_content):
                     "unit": unit
                 })
     
-    # 將結果儲存成 JSON 檔案
+    # 直接將結果組裝並儲存成 HTML 檔案
     if results:
-        output_file = os.path.join(site_output_dir, f"{category}.json")
+        output_file = os.path.join(site_output_dir, f"{category}.html")
+        
+        html_output = [
+            "<!DOCTYPE html>",
+            "<html lang='zh-Hant'>",
+            "<head>",
+            "    <meta charset='UTF-8'>",
+            f"    <title>{category} 公告清單</title>",
+            "    <style>",
+            "        body { font-family: Arial, sans-serif; padding: 20px; }",
+            "        table { border-collapse: collapse; width: 100%; max-width: 1000px; margin: auto; }",
+            "        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }",
+            "        th { background-color: #f4f4f4; }",
+            "        a { color: #0056b3; text-decoration: none; }",
+            "        a:hover { text-decoration: underline; }",
+            "    </style>",
+            "</head>",
+            "<body>",
+            f"    <h2 style='text-align: center;'>{category} 公告清單</h2>",
+            "    <table>",
+            "        <thead>",
+            "            <tr>",
+            "                <th>日期</th>",
+            "                <th>發布單位</th>",
+            "                <th>標題</th>",
+            "            </tr>",
+            "        </thead>",
+            "        <tbody>"
+        ]
+        
+        for item in results:
+            html_output.append("            <tr>")
+            html_output.append(f"                <td>{item['date']}</td>")
+            html_output.append(f"                <td>{item['unit']}</td>")
+            html_output.append(f"                <td><a href='{item['link']}' target='_blank'>{item['title']}</a></td>")
+            html_output.append("            </tr>")
+            
+        html_output.extend([
+            "        </tbody>",
+            "    </table>",
+            "</body>",
+            "</html>"
+        ])
+        
         with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(results, f, ensure_ascii=False, indent=4)
-        print(f"         -> [成功存檔] 已將 {len(results)} 筆資料儲存至 {output_file}")
+            f.write("\n".join(html_output))
+            
+        print(f"         -> [成功存檔] 已將 {len(results)} 筆資料直接轉存至 {output_file}")
     else:
         print("         -> [警告] 沒有抓取到任何資料，未產生檔案。")
