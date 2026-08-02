@@ -4,6 +4,8 @@ import glob
 import time
 import requests
 from datetime import datetime
+import discord_alert
+
 
 def get_embed_color(link):
     if not link:
@@ -153,6 +155,11 @@ def run_notifier(jsonl_dir, history_dir):
                 sent_base_keys.add(base_key) 
                 sent_combos.append(save_key)
                 new_sent_count += 1
+
+                alert_title = data.get("title", "無標題公告")
+                alert_link = data.get("link", "")
+                discord_alert.send_alert(site_name, alert_title, alert_link)
+                
                 time.sleep(1.5)
 
         with open(history_file, "w", encoding="utf-8") as f:
