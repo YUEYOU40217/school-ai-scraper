@@ -48,6 +48,8 @@ jobs:
           SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
           WEBHOOK_CSU: ${{ secrets.WEBHOOK_CSU }}
           WEBHOOK_NKUST: ${{ secrets.WEBHOOK_NKUST }}
+          WEBHOOK_ALERT_CSU: ${{ secrets.WEBHOOK_ALERT_CSU }}
+          WEBHOOK_ALERT_NKUST: ${{ secrets.WEBHOOK_ALERT_NKUST }}
         run: |
           python main.py
 
