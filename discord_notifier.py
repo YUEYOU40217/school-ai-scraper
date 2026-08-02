@@ -155,10 +155,6 @@ def run_notifier(jsonl_dir, history_dir):
                 sent_base_keys.add(base_key) 
                 sent_combos.append(save_key)
                 new_sent_count += 1
-
-                alert_title = data.get("title", "無標題公告")
-                alert_link = data.get("link", "")
-                discord_alert.send_alert(site_name)
                 
                 time.sleep(1.5)
 
@@ -167,5 +163,6 @@ def run_notifier(jsonl_dir, history_dir):
             
         if new_sent_count > 0:
             print(f"   [完成] {site_name} 共推送 {new_sent_count} 則新公告，對照表已更新。")
+            discord_alert.send_alert(site_name)
         else:
             print(f"   [完成] {site_name} 目前沒有新公告。")
