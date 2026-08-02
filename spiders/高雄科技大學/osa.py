@@ -20,18 +20,23 @@ def run(site_output_dir, fetch_content):
             
         soup = BeautifulSoup(list_html, "html.parser")
         
+        # 尋找目標區塊
         target_block = soup.find("div", id="pageptlist")
         
         if target_block:
             for a_tag in target_block.find_all("a"):
                 link = a_tag.get("href")
                 if link:
+                    # 清理網址中的空白
                     link = link.strip().replace(" ", "").replace("%20", "")
 
+                    # 修正縮排並加入判斷：如果是相對路徑，則補上主網域
+                    if link.startswith("/"):
                         link = "https://osa.nkust.edu.tw" + link
+                        
                     a_tag["href"] = link
             
-
+            # 將目標區塊轉回 HTML 字串
             page_output_html = str(target_block)
             
             filename = f"{category}_p{page}.html"
