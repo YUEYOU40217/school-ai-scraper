@@ -158,7 +158,7 @@ def run_notifier(jsonl_dir, history_dir):
 
                 alert_title = data.get("title", "無標題公告")
                 alert_link = data.get("link", "")
-                discord_alert.send_alert(site_name, alert_title, alert_link)
+                discord_alert.send_alert(site_name)
                 
                 time.sleep(1.5)
 
