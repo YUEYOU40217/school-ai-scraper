@@ -16,7 +16,7 @@ def run(site_output_dir, fetch_content):
     print(f"      [{category}] 開始請求 API: {api_url}")
     
     # 直接抓取第 1 頁，並要求一次回傳 50 筆資料 (你目前設定為抓 8 頁，每頁 20 筆)
-    for page in range(1, 9):
+    for page in range(1, 7):
         payload = {
             "page": page,
             "pageSize": 20
