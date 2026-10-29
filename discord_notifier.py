@@ -28,11 +28,13 @@ def send_message(webhook_url, site_name, item, display_date):
     link = item.get("link", "")
     short_name = item.get("short_name", "校園")
     
+    disclaimer = "【系統自動同步】本訊息由自動爬蟲抓取，可能存在時間差。重大學務請以學校官網為準。"
+    
     if display_date:
-        description_text = f"\n\n **發布日期：** {display_date}"
+        description_text = f"\n\n **發布日期：** {display_date}\n\n{disclaimer}"
         content_text = f"發布日期：{display_date}"
     else:
-        description_text = ""
+        description_text = f"{disclaimer}"
         content_text = f"{site_name} 最新公告"
     
     payload = {
