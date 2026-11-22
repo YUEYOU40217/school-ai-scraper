@@ -5,8 +5,16 @@ import re
 import uuid
 import time
 from google import genai
+from google.genai import types
 
-MODEL_NAME = "gemini-3.1-flash-lite"
+MODEL_NAME = "gemini-4-hydrogen"
+
+# Hydrogen 預設 thinking_level 是 high（慢、思考 token 也計費）。
+# 這裡只是把 HTML 轉成 JSONL，用 low 就夠；想要更準可改 "medium" / "high"。
+# 注意：Hydrogen 不支援 "minimal"，填了會回 400。
+GEN_CONFIG = types.GenerateContentConfig(
+    thinking_config=types.ThinkingConfig(thinking_level="low")
+)
 ai_client = None
 
 DOMAIN_MAP = {
@@ -108,7 +116,8 @@ def process_single_html_with_retry(site_name, file_path):
             time.sleep(delay)
             response = ai_client.models.generate_content(
                 model=MODEL_NAME,
-                contents=prompt
+                contents=prompt,
+                config=GEN_CONFIG
             )
             return clean_ai_response(response.text)
         except Exception as e:
