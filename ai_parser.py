@@ -7,7 +7,7 @@ import time
 from google import genai
 from google.genai import types
 
-MODEL_NAME = "gemini-4-hydrogen"
+MODEL_NAME = "gemini-3.8-flash"
 
 # Hydrogen 預設 thinking_level 是 high（慢、思考 token 也計費）。
 # 這裡只是把 HTML 轉成 JSONL，用 low 就夠；想要更準可改 "medium" / "high"。
